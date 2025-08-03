@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Custom scrollbar styles */
+    /* 自定義滾動條樣式 */
     ::-webkit-scrollbar {
       width: 8px;
     }
@@ -23,6 +23,16 @@
       background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
       font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
       color: #333;
+    }
+    .record-card {
+      background-color: #f8f9fa;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
   </style>
 </head>
@@ -71,7 +81,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const firebaseConfig = {
@@ -96,6 +106,20 @@
     const parkingList = document.getElementById('parking-list');
     const loadingEl = document.getElementById('loading');
     const errorMessageEl = document.getElementById('error-message');
+
+    // 簡化的戶別對應表
+    const huBeiMap = {
+        '10A': '10A-10樓', '10B': '10B-10樓',
+        '9A': '9A-9樓', '9B': '9B-9樓',
+        '8A': '8A-8樓', '8B': '8B-8樓',
+        '7A': '7A-7樓', '7B': '7B-7樓', '7C': '7C-7樓', '7D': '7D-7樓', '7E': '7E-7樓', '7F': '7F-7樓',
+        '6A': '6A-6樓', '6B': '6B-6樓', '6C': '6C-6樓', '6D': '6D-6樓', '6E': '6E-6樓', '6F': '6F-6樓',
+        '5A': '5A-5樓', '5B': '5B-5樓', '5C': '5C-5樓', '5D': '5D-5樓', '5E': '5E-5樓', '5F': '5F-5樓',
+        '4A': '4A-4樓', '4B': '4B-4樓', '4CD': '4CD-4樓', '4EF': '4EF-4樓',
+        '3A': '3A-3樓', '3B': '3B-3樓', '3CD': '3CD-3樓', '3EF': '3EF-3樓',
+        '2A': '2A-2樓', '2B': '2B-2樓', '2C': '2C-2樓', '2D': '2D-2樓', '2E': '2E-2樓', '2F': '2F-2樓',
+        '1A': '1A-1樓', '1B': '1B-1樓', '施工': '施工'
+    };
 
     function showLoading(show) {
       loadingEl.classList.toggle('hidden', !show);
@@ -148,7 +172,7 @@
           snapshot.forEach(doc => {
             records.push({ id: doc.id, ...doc.data() });
           });
-          renderParkingList(records);
+          renderParkingList(records.filter(record => !record.leaveTime)); // 只顯示沒有離開時間的記錄
           showLoading(false);
         }, (error) => {
           console.error("Failed to listen to Firestore:", error);
@@ -170,15 +194,24 @@
       }
       records.forEach(record => {
         const recordEl = document.createElement('div');
-        recordEl.className = 'flex items-center justify-between p-4 bg-gray-100 rounded-lg shadow-sm';
+        recordEl.className = 'record-card flex items-center justify-between p-4 bg-gray-100 rounded-lg shadow-sm';
+        
+        // 格式化停放時間
+        const parkingTime = new Date(record.parkingTime).toLocaleString('zh-TW', { hour12: false });
+
         recordEl.innerHTML = `
-          <div>
-            <p class="font-bold text-gray-800">${record.carPlate}</p>
-            <p class="text-sm text-gray-600">${record.huBei}</p>
+          <div class="flex-grow">
+            <p class="font-bold text-gray-800">${record.carPlate} - ${record.huBei}</p>
+            <p class="text-xs text-gray-600">停放時間: ${parkingTime}</p>
           </div>
-          <button data-id="${record.id}" class="delete-btn text-red-500 hover:text-red-700 transition duration-150">
-            刪除
-          </button>
+          <div class="flex space-x-2">
+            <button data-id="${record.id}" class="leave-btn py-1 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
+              離開
+            </button>
+            <button data-id="${record.id}" class="delete-btn py-1 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition duration-150">
+              移除
+            </button>
+          </div>
         `;
         parkingList.appendChild(recordEl);
       });
@@ -186,24 +219,32 @@
       document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', () => deleteRecord(btn.dataset.id));
       });
+      document.querySelectorAll('.leave-btn').forEach(btn => {
+        btn.addEventListener('click', () => leaveRecord(btn.dataset.id));
+      });
     }
 
     async function addRecord() {
       const carPlate = carPlateInput.value.trim();
-      const huBei = huBeiInput.value.trim();
+      let huBei = huBeiInput.value.trim();
 
       if (!carPlate || !huBei) {
         showError('車牌號碼和戶別不能為空。');
         return;
       }
       hideError();
+      
+      // 自動補全戶別
+      if (huBeiMap[huBei]) {
+          huBei = huBeiMap[huBei];
+      }
 
       try {
         const docRef = doc(collection(db, collectionPath));
         await setDoc(docRef, {
           carPlate,
           huBei,
-          timestamp: new Date().toISOString()
+          parkingTime: new Date().toISOString()
         });
         carPlateInput.value = '';
         huBeiInput.value = '';
@@ -211,6 +252,18 @@
         console.error("Failed to add record:", e);
         showError("新增記錄失敗。請重試。");
       }
+    }
+
+    async function leaveRecord(id) {
+        try {
+            const docRef = doc(db, collectionPath, id);
+            await updateDoc(docRef, {
+                leaveTime: new Date().toISOString()
+            });
+        } catch (e) {
+            console.error("Failed to leave record:", e);
+            showError("更新記錄失敗。請重試。");
+        }
     }
 
     async function deleteRecord(id) {
