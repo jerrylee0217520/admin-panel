@@ -181,16 +181,17 @@
       recognition.interimResults = false;
 
       recognition.onstart = () => {
-        statusMessage.textContent = '正在聆聽... 請說出車號與戶別';
+        statusMessage.textContent = '正在聆聽...';
       };
 
-      recognition.onresult = (event) => {
+      recognition.onresult = async (event) => {
         const speechResult = event.results[0][0].transcript;
-        parseSpeech(speechResult);
+        statusMessage.textContent = `正在處理: "${speechResult}"`;
+        await parseSpeechWithAI(speechResult);
       };
 
       recognition.onend = () => {
-        statusMessage.textContent = '';
+        // Keep status message until AI processing is done
       };
 
       recognition.onerror = (event) => {
@@ -199,22 +200,61 @@
       };
     }
 
-    function parseSpeech(text) {
-      statusMessage.textContent = `辨識結果: ${text}`;
-      // 簡單的關鍵字解析邏輯
-      const carPlateRegex = /[A-Z0-9]{3,4}[- ]?[A-Z0-9]{3,4}/i;
-      const huBeiRegex = /(戶別|戶號|號)\s*([A-Z0-9\u4e00-\u9fa5]+)/;
-      
-      const carPlateMatch = text.match(carPlateRegex);
-      const huBeiMatch = text.match(huBeiRegex);
+    async function parseSpeechWithAI(text) {
+        try {
+            const prompt = `從以下這段中文語句中，提取出車牌號碼和戶別資訊。車牌號碼通常由英文字母和數字組成。戶別可能是樓層、房號，或是如"施工"、"貴賓"等特殊詞彙。請以JSON格式回傳，鍵值分別為 'carPlate' 和 'huBei'。語句: "${text}"`;
+            
+            const payload = {
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: {
+                  responseMimeType: "application/json",
+                  responseSchema: {
+                      type: "OBJECT",
+                      properties: {
+                          "carPlate": { "type": "STRING" },
+                          "huBei": { "type": "STRING" }
+                      },
+                      required: ["carPlate", "huBei"]
+                  }
+              }
+            };
 
-      if (carPlateMatch) {
-        carPlateInput.value = carPlateMatch[0].toUpperCase();
-      }
-      if (huBeiMatch) {
-        huBeiInput.value = huBeiMatch[2].toUpperCase();
-        huBeiInput.dispatchEvent(new Event('blur')); // 觸發自動完成
-      }
+            const apiKey = ""; // API key will be provided by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`API 請求失敗: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.candidates && result.candidates.length > 0) {
+                const part = result.candidates[0].content.parts[0];
+                const parsedJson = JSON.parse(part.text);
+                if (parsedJson.carPlate) {
+                    carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, '');
+                }
+                if (parsedJson.huBei) {
+                    huBeiInput.value = parsedJson.huBei.toUpperCase();
+                    huBeiInput.dispatchEvent(new Event('blur')); // 觸發自動完成
+                }
+                statusMessage.textContent = 'AI 辨識完成！';
+            } else {
+                throw new Error('無效的 AI 回應。');
+            }
+        } catch (error) {
+            console.error('AI 語音解析錯誤:', error);
+            showError(`AI 語音解析失敗: ${error.message}`);
+            statusMessage.textContent = '解析失敗，請手動輸入。';
+        } finally {
+            setTimeout(() => { if (statusMessage.textContent === 'AI 辨識完成！') statusMessage.textContent = ''; }, 2000);
+        }
     }
 
     // --- AI 功能: 圖像辨識 ---
@@ -272,7 +312,7 @@
                     const part = result.candidates[0].content.parts[0];
                     const parsedJson = JSON.parse(part.text);
                     if (parsedJson.carPlate) {
-                        carPlateInput.value = parsedJson.carPlate.toUpperCase();
+                        carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, '');
                         statusMessage.textContent = '車牌辨識成功！';
                     } else {
                         throw new Error('AI 未能辨識出車牌。');
@@ -287,8 +327,8 @@
                 statusMessage.textContent = '辨識失敗，請手動輸入。';
             } finally {
                 addRecordBtn.disabled = false;
-                // 清空上傳檔案，以便下次可以選擇同一個檔案
                 imageUpload.value = '';
+                setTimeout(() => { if (statusMessage.textContent === '車牌辨識成功！') statusMessage.textContent = ''; }, 2000);
             }
         };
         reader.readAsDataURL(file);
