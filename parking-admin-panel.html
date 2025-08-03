@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* 自定義滾動條樣式 */
+    /* Custom scrollbar styles */
     ::-webkit-scrollbar {
       width: 8px;
     }
@@ -33,6 +33,16 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex; justify-content: center; align-items: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: white; padding: 2rem; border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     }
   </style>
 </head>
@@ -75,13 +85,19 @@
           <!-- Parking records will be dynamically added here -->
         </div>
       </div>
+
+      <div class="mt-8 flex justify-center space-x-4">
+        <button id="exportCsvBtn" class="py-2 px-4 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition">
+          匯出所有記錄 (CSV)
+        </button>
+      </div>
     </div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, updateDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const firebaseConfig = {
@@ -106,6 +122,7 @@
     const parkingList = document.getElementById('parking-list');
     const loadingEl = document.getElementById('loading');
     const errorMessageEl = document.getElementById('error-message');
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
 
     // 簡化的戶別對應表
     const huBeiMap = {
@@ -120,6 +137,9 @@
         '2A': '2A-2樓', '2B': '2B-2樓', '2C': '2C-2樓', '2D': '2D-2樓', '2E': '2E-2樓', '2F': '2F-2樓',
         '1A': '1A-1樓', '1B': '1B-1樓', '施工': '施工'
     };
+    
+    // 儲存所有記錄，用於匯出
+    let allRecords = [];
 
     function showLoading(show) {
       loadingEl.classList.toggle('hidden', !show);
@@ -168,11 +188,11 @@
       try {
         const collectionRef = collection(db, collectionPath);
         onSnapshot(collectionRef, (snapshot) => {
-          const records = [];
+          allRecords = [];
           snapshot.forEach(doc => {
-            records.push({ id: doc.id, ...doc.data() });
+            allRecords.push({ id: doc.id, ...doc.data() });
           });
-          renderParkingList(records.filter(record => !record.leaveTime)); // 只顯示沒有離開時間的記錄
+          renderParkingList(allRecords.filter(record => !record.leaveTime));
           showLoading(false);
         }, (error) => {
           console.error("Failed to listen to Firestore:", error);
@@ -275,6 +295,35 @@
         showError("刪除記錄失敗。請重試。");
       }
     }
+
+    function downloadCsv(data, filename) {
+        const csvRows = [
+            ["車牌號碼", "戶別", "停放時間", "離開時間"]
+        ];
+        data.forEach(row => {
+            const parkingTime = new Date(row.parkingTime).toLocaleString('zh-TW', { hour12: false });
+            const leaveTime = row.leaveTime ? new Date(row.leaveTime).toLocaleString('zh-TW', { hour12: false }) : '';
+            csvRows.push([
+                row.carPlate,
+                row.huBei,
+                parkingTime,
+                leaveTime
+            ]);
+        });
+
+        const csvString = csvRows.map(row => row.join(',')).join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    exportCsvBtn.addEventListener('click', () => {
+        downloadCsv(allRecords, `parking_records_${new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })}.csv`);
+    });
 
     addRecordBtn.addEventListener('click', addRecord);
     window.addEventListener('DOMContentLoaded', initializeAppAndAuth);
