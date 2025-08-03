@@ -29,6 +29,17 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+    .record-card {
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease-in-out;
+    }
   </style>
 </head>
 <body class="antialiased">
@@ -74,19 +85,24 @@
         <div id="addBtnSpinner" class="spinner w-6 h-6 border-4 border-white rounded-full hidden mx-auto"></div>
       </button>
     </div>
+
+    <!-- On-site vehicles list -->
+    <div class="mt-8">
+        <h2 class="text-xl font-bold text-gray-700 mb-4 text-center border-t pt-6">在場車輛</h2>
+        <div id="onSiteList" class="space-y-3">
+            <!-- On-site vehicles will be dynamically added here -->
+        </div>
+    </div>
+
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, collection, serverTimestamp, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // --- 設定 ---
-    // =================================================================================
-    // ================== 請將您申請到的 API 金鑰貼在下方的引號中 ==================
-    // =================================================================================
-    const USER_PROVIDED_API_KEY = "AIzaSyCspWUkVA6STWgjrLeXVgg5JnWnJWTKAtU"; // <--- 在這裡貼上您的 API 金鑰
-    // =================================================================================
+    const USER_PROVIDED_API_KEY = "AIzaSyCspWUkVA6STWgjrLeXVgg5JnWnJWTKAtU";
     
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     let firebaseConfig;
@@ -123,6 +139,7 @@
     const errorText = document.getElementById('error-text');
     const addBtnText = document.getElementById('addBtnText');
     const addBtnSpinner = document.getElementById('addBtnSpinner');
+    const onSiteList = document.getElementById('onSiteList');
 
     // --- 全域變數 ---
     let db, auth;
@@ -169,6 +186,7 @@
         } else {
           await signInAnonymously(auth);
         }
+        setupRealtimeListener(); // Start listening after auth
       } catch (e) {
         console.error("Firebase Initialization failed:", e);
         showError("無法連接至伺服器。");
@@ -178,7 +196,7 @@
     function getApiKey() {
         const key = USER_PROVIDED_API_KEY || firebaseConfig.apiKey;
         if (!key) {
-            showError("錯誤：未設定 API 金鑰。請依照說明申請並填入金鑰。");
+            showError("錯誤：未設定 API 金鑰。");
             return null;
         }
         return key;
@@ -195,18 +213,13 @@
       recognition.lang = 'zh-TW';
       recognition.interimResults = false;
 
-      recognition.onstart = () => {
-        statusMessage.textContent = '正在聆聽...';
-      };
-
+      recognition.onstart = () => { statusMessage.textContent = '正在聆聽...'; };
       recognition.onresult = async (event) => {
         const speechResult = event.results[0][0].transcript;
         statusMessage.textContent = `正在處理: "${speechResult}"`;
         await parseSpeechWithAI(speechResult);
       };
-
       recognition.onend = () => {};
-
       recognition.onerror = (event) => {
         showError(`語音辨識錯誤: ${event.error}`);
         statusMessage.textContent = '';
@@ -216,10 +229,8 @@
     async function parseSpeechWithAI(text) {
         const apiKey = getApiKey();
         if (!apiKey) return;
-
         try {
             const prompt = `從以下這段中文語句中，提取出車牌號碼和戶別資訊。車牌號碼通常由英文字母和數字組成。戶別可能是樓層、房號，或是如"施工"、"貴賓"等特殊詞彙。請以JSON格式回傳，鍵值分別為 'carPlate' 和 'huBei'。語句: "${text}"`;
-            
             const payload = {
               contents: [{ role: "user", parts: [{ text: prompt }] }],
               generationConfig: {
@@ -231,36 +242,17 @@
                   }
               }
             };
-            
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-            
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                throw new Error(`API 請求失敗: ${response.status}. ${errorBody}`);
-            }
-
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) { throw new Error(`API 請求失敗: ${response.status}.`); }
             const result = await response.json();
-            
             if (result.candidates && result.candidates.length > 0) {
                 const part = result.candidates[0].content.parts[0];
                 const parsedJson = JSON.parse(part.text);
-                if (parsedJson.carPlate) {
-                    carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, '');
-                }
-                if (parsedJson.huBei) {
-                    huBeiInput.value = parsedJson.huBei.toUpperCase();
-                    huBeiInput.dispatchEvent(new Event('blur'));
-                }
+                if (parsedJson.carPlate) { carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, ''); }
+                if (parsedJson.huBei) { huBeiInput.value = parsedJson.huBei.toUpperCase(); huBeiInput.dispatchEvent(new Event('blur')); }
                 statusMessage.textContent = 'AI 辨識完成！';
-            } else {
-                throw new Error('無效的 AI 回應。');
-            }
+            } else { throw new Error('無效的 AI 回應。'); }
         } catch (error) {
             console.error('AI 語音解析錯誤:', error);
             showError(`AI 語音解析失敗: ${error.message}`);
@@ -274,59 +266,34 @@
     async function handleImageUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
-
         const apiKey = getApiKey();
         if (!apiKey) return;
-
         statusMessage.textContent = '正在辨識圖片...';
         addRecordBtn.disabled = true;
-
         const reader = new FileReader();
         reader.onloadend = async () => {
             const base64ImageData = reader.result.split(',')[1];
             try {
                 const prompt = "從這張圖片中辨識出車牌號碼，並以JSON格式回傳。車牌號碼的鍵是 'carPlate'。";
-                
                 const payload = {
                   contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64ImageData } } ] } ],
                   generationConfig: {
                       responseMimeType: "application/json",
-                      responseSchema: {
-                          type: "OBJECT",
-                          properties: { "carPlate": { "type": "STRING" } },
-                          required: ["carPlate"]
-                      }
+                      responseSchema: { type: "OBJECT", properties: { "carPlate": { "type": "STRING" } }, required: ["carPlate"] }
                   }
                 };
-                
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errorBody = await response.text();
-                    throw new Error(`API 請求失敗: ${response.status}. ${errorBody}`);
-                }
-
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) { throw new Error(`API 請求失敗: ${response.status}.`); }
                 const result = await response.json();
-                
                 if (result.candidates && result.candidates.length > 0) {
                     const part = result.candidates[0].content.parts[0];
                     const parsedJson = JSON.parse(part.text);
                     if (parsedJson.carPlate) {
                         carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, '');
                         statusMessage.textContent = '車牌辨識成功！';
-                    } else {
-                        throw new Error('AI 未能辨識出車牌。');
-                    }
-                } else {
-                    throw new Error('無效的 AI 回應。');
-                }
-
+                    } else { throw new Error('AI 未能辨識出車牌。'); }
+                } else { throw new Error('無效的 AI 回應。'); }
             } catch (error) {
                 console.error('AI 辨識錯誤:', error);
                 showError(`AI 辨識失敗: ${error.message}`);
@@ -340,37 +307,71 @@
         reader.readAsDataURL(file);
     }
 
+    // --- 資料庫與畫面渲染 ---
+    function setupRealtimeListener() {
+      try {
+        const collectionRef = collection(db, collectionPath);
+        onSnapshot(collectionRef, (snapshot) => {
+          const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const onSiteRecords = allRecords.filter(record => !record.leaveTime);
+          onSiteRecords.sort((a, b) => (a.entryTime?.seconds || 0) - (b.entryTime?.seconds || 0));
+          renderOnSiteList(onSiteRecords);
+        });
+      } catch (e) {
+        console.error("Failed to set up Firestore listener:", e);
+        showError("設定數據監聽失敗。");
+      }
+    }
 
-    // --- 資料庫操作 ---
+    function renderOnSiteList(records) {
+        onSiteList.innerHTML = '';
+        if (records.length === 0) {
+            onSiteList.innerHTML = `<p class="text-gray-500 text-center text-sm">目前沒有在場車輛。</p>`;
+            return;
+        }
+        records.forEach(record => {
+            const recordEl = document.createElement('div');
+            recordEl.className = 'record-card';
+            recordEl.innerHTML = `
+              <div class="flex-grow">
+                <p class="font-bold text-base text-gray-800">${record.carPlate}</p>
+                <p class="text-sm text-gray-600">${record.huBei}</p>
+              </div>
+              <button data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
+                出場
+              </button>
+            `;
+            onSiteList.appendChild(recordEl);
+        });
+        document.querySelectorAll('.leave-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                leaveRecord(btn.dataset.id);
+            });
+        });
+    }
+
     async function addRecord() {
       const carPlate = carPlateInput.value.trim().toUpperCase();
       const huBeiInputVal = huBeiInput.value.trim();
-
       if (!carPlate || !huBeiInputVal) {
         showError('車牌號碼和戶別不能為空。');
         return;
       }
       hideError();
-      
       addBtnText.classList.add('hidden');
       addBtnSpinner.classList.remove('hidden');
       addRecordBtn.disabled = true;
-
       const finalHuBei = findFullHuBei(huBeiInputVal);
       try {
-        const docRef = doc(collection(db, collectionPath));
-        await setDoc(docRef, {
-          carPlate: carPlate,
-          huBei: finalHuBei,
-          entryTime: serverTimestamp(),
-          leaveTime: null
+        await setDoc(doc(collection(db, collectionPath)), {
+          carPlate: carPlate, huBei: finalHuBei,
+          entryTime: serverTimestamp(), leaveTime: null
         });
-        carPlateInput.value = '';
-        huBeiInput.value = '';
+        carPlateInput.value = ''; huBeiInput.value = '';
         statusMessage.textContent = '新增成功！';
         setTimeout(() => statusMessage.textContent = '', 2000);
       } catch (e) {
-        console.error("Failed to add record:", e);
         showError("新增記錄失敗，請檢查網路連線。");
       } finally {
         addBtnText.classList.remove('hidden');
@@ -378,26 +379,26 @@
         addRecordBtn.disabled = false;
       }
     }
+
+    async function leaveRecord(id) {
+        try {
+            await updateDoc(doc(db, collectionPath, id), { leaveTime: serverTimestamp() });
+            statusMessage.textContent = '出場登記成功！';
+            setTimeout(() => statusMessage.textContent = '', 2000);
+        } catch (e) {
+            showError("更新記錄失敗。請重試。");
+        }
+    }
     
     // --- 事件監聽 ---
-    voiceBtn.addEventListener('click', () => {
-      if (recognition) {
-        recognition.start();
-      }
-    });
-
-    cameraBtn.addEventListener('click', () => {
-      imageUpload.click();
-    });
-
+    voiceBtn.addEventListener('click', () => { if (recognition) recognition.start(); });
+    cameraBtn.addEventListener('click', () => { imageUpload.click(); });
     imageUpload.addEventListener('change', handleImageUpload);
-
     huBeiInput.addEventListener('blur', () => {
         if (huBeiInput.value.trim()) {
             huBeiInput.value = findFullHuBei(huBeiInput.value);
         }
     });
-
     addRecordBtn.addEventListener('click', addRecord);
 
     // --- 初始化 ---
