@@ -219,7 +219,8 @@
               }
             };
 
-            const apiKey = ""; // API key will be provided by the environment
+            // FIX: Use API key from Firebase config
+            const apiKey = firebaseConfig.apiKey;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
             
             const response = await fetch(apiUrl, {
@@ -229,7 +230,8 @@
             });
 
             if (!response.ok) {
-                throw new Error(`API 請求失敗: ${response.statusText}`);
+                const errorBody = await response.text();
+                throw new Error(`API 請求失敗: ${response.status} ${response.statusText}. ${errorBody}`);
             }
 
             const result = await response.json();
@@ -293,7 +295,8 @@
                   }
                 };
 
-                const apiKey = ""; // API key will be provided by the environment
+                // FIX: Use API key from Firebase config
+                const apiKey = firebaseConfig.apiKey;
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
                 
                 const response = await fetch(apiUrl, {
@@ -303,7 +306,8 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(`API 請求失敗: ${response.statusText}`);
+                    const errorBody = await response.text();
+                    throw new Error(`API 請求失敗: ${response.status} ${response.statusText}. ${errorBody}`);
                 }
 
                 const result = await response.json();
