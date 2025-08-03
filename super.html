@@ -82,6 +82,12 @@
     import { getFirestore, doc, setDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // --- 設定 ---
+    // =================================================================================
+    // ================== 請將您申請到的 API 金鑰貼在下方的引號中 ==================
+    // =================================================================================
+    const USER_PROVIDED_API_KEY = "AIzaSyCspWUkVA6STWgjrLeXVgg5JnWnJWTKAtU"; // <--- 在這裡貼上您的 API 金鑰
+    // =================================================================================
+    
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     let firebaseConfig;
     let useTokenAuth = false;
@@ -169,6 +175,15 @@
       }
     }
 
+    function getApiKey() {
+        const key = USER_PROVIDED_API_KEY || firebaseConfig.apiKey;
+        if (!key) {
+            showError("錯誤：未設定 API 金鑰。請依照說明申請並填入金鑰。");
+            return null;
+        }
+        return key;
+    }
+
     // --- AI 功能: 語音辨識 ---
     function setupSpeechRecognition() {
       if (!SpeechRecognition) {
@@ -190,9 +205,7 @@
         await parseSpeechWithAI(speechResult);
       };
 
-      recognition.onend = () => {
-        // Keep status message until AI processing is done
-      };
+      recognition.onend = () => {};
 
       recognition.onerror = (event) => {
         showError(`語音辨識錯誤: ${event.error}`);
@@ -201,6 +214,9 @@
     }
 
     async function parseSpeechWithAI(text) {
+        const apiKey = getApiKey();
+        if (!apiKey) return;
+
         try {
             const prompt = `從以下這段中文語句中，提取出車牌號碼和戶別資訊。車牌號碼通常由英文字母和數字組成。戶別可能是樓層、房號，或是如"施工"、"貴賓"等特殊詞彙。請以JSON格式回傳，鍵值分別為 'carPlate' 和 'huBei'。語句: "${text}"`;
             
@@ -210,17 +226,12 @@
                   responseMimeType: "application/json",
                   responseSchema: {
                       type: "OBJECT",
-                      properties: {
-                          "carPlate": { "type": "STRING" },
-                          "huBei": { "type": "STRING" }
-                      },
+                      properties: { "carPlate": { "type": "STRING" }, "huBei": { "type": "STRING" } },
                       required: ["carPlate", "huBei"]
                   }
               }
             };
-
-            // FIX: Use API key from Firebase config
-            const apiKey = firebaseConfig.apiKey;
+            
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
             
             const response = await fetch(apiUrl, {
@@ -231,7 +242,7 @@
 
             if (!response.ok) {
                 const errorBody = await response.text();
-                throw new Error(`API 請求失敗: ${response.status} ${response.statusText}. ${errorBody}`);
+                throw new Error(`API 請求失敗: ${response.status}. ${errorBody}`);
             }
 
             const result = await response.json();
@@ -244,7 +255,7 @@
                 }
                 if (parsedJson.huBei) {
                     huBeiInput.value = parsedJson.huBei.toUpperCase();
-                    huBeiInput.dispatchEvent(new Event('blur')); // 觸發自動完成
+                    huBeiInput.dispatchEvent(new Event('blur'));
                 }
                 statusMessage.textContent = 'AI 辨識完成！';
             } else {
@@ -264,6 +275,9 @@
         const file = event.target.files[0];
         if (!file) return;
 
+        const apiKey = getApiKey();
+        if (!apiKey) return;
+
         statusMessage.textContent = '正在辨識圖片...';
         addRecordBtn.disabled = true;
 
@@ -274,29 +288,17 @@
                 const prompt = "從這張圖片中辨識出車牌號碼，並以JSON格式回傳。車牌號碼的鍵是 'carPlate'。";
                 
                 const payload = {
-                  contents: [
-                    {
-                        role: "user",
-                        parts: [
-                            { text: prompt },
-                            { inlineData: { mimeType: "image/jpeg", data: base64ImageData } }
-                        ]
-                    }
-                  ],
+                  contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64ImageData } } ] } ],
                   generationConfig: {
                       responseMimeType: "application/json",
                       responseSchema: {
                           type: "OBJECT",
-                          properties: {
-                              "carPlate": { "type": "STRING" }
-                          },
+                          properties: { "carPlate": { "type": "STRING" } },
                           required: ["carPlate"]
                       }
                   }
                 };
-
-                // FIX: Use API key from Firebase config
-                const apiKey = firebaseConfig.apiKey;
+                
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
                 
                 const response = await fetch(apiUrl, {
@@ -307,7 +309,7 @@
 
                 if (!response.ok) {
                     const errorBody = await response.text();
-                    throw new Error(`API 請求失敗: ${response.status} ${response.statusText}. ${errorBody}`);
+                    throw new Error(`API 請求失敗: ${response.status}. ${errorBody}`);
                 }
 
                 const result = await response.json();
