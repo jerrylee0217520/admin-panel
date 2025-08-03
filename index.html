@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>AI 智慧停車巡檢工具</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></link>
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ffffff"/>
+  <style>
+    html, body {
+      overscroll-behavior-y: contain;
+      background: #f0f4f8;
+      font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+    }
+    .btn-ai {
+      transition: all 0.3s ease;
+    }
+    .btn-ai:active {
+      transform: scale(0.95);
+      background-color: #1e40af;
+    }
+    .status-message {
+      transition: all 0.3s ease;
+    }
+    .spinner {
+      border-top-color: transparent;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .record-card {
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease-in-out;
+    }
+  </style>
+</head>
+<body class="antialiased">
+  <div class="max-w-md mx-auto bg-white p-6 rounded-b-xl shadow-lg">
+    <div class="text-center">
+      <h1 class="text-2xl font-bold text-gray-800">AI 智慧停車巡檢工具</h1>
+      <p class="text-gray-500 mt-2">用語音或拍照，快速登記車輛</p>
+    </div>
+
+    <div id="error-message" class="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative hidden" role="alert">
+      <strong class="font-bold">錯誤：</strong>
+      <span class="block sm:inline" id="error-text"></span>
+    </div>
+
+    <div class="mt-6 space-y-4">
+      <div>
+        <label for="carPlate" class="block text-sm font-medium text-gray-700">車牌號碼:</label>
+        <input type="text" id="carPlate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3 text-lg uppercase" placeholder="待辨識...">
+      </div>
+      <div>
+        <label for="huBei" class="block text-sm font-medium text-gray-700">戶別:</label>
+        <input type="text" id="huBei" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3 text-lg uppercase" placeholder="待辨識...">
+      </div>
+    </div>
+
+    <div class="mt-6 grid grid-cols-2 gap-4">
+      <button id="voiceBtn" class="btn-ai flex flex-col items-center justify-center p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700">
+        <i class="fas fa-microphone-alt fa-2x"></i>
+        <span class="mt-2 text-sm font-medium">語音輸入</span>
+      </button>
+      <button id="cameraBtn" class="btn-ai flex flex-col items-center justify-center p-4 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700">
+        <i class="fas fa-camera-retro fa-2x"></i>
+        <span class="mt-2 text-sm font-medium">拍照辨識</span>
+      </button>
+      <input type="file" id="imageUpload" class="hidden" accept="image/*" capture="environment">
+    </div>
+
+    <div id="statusMessage" class="status-message text-center text-gray-600 mt-4 h-6"></div>
+
+    <div class="mt-4">
+      <button id="addRecordBtn" class="w-full py-4 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400">
+        <span id="addBtnText">新增停車</span>
+        <div id="addBtnSpinner" class="spinner w-6 h-6 border-4 border-white rounded-full hidden mx-auto"></div>
+      </button>
+    </div>
+
+    <!-- On-site vehicles list -->
+    <div class="mt-8">
+        <h2 class="text-xl font-bold text-gray-700 mb-4 text-center border-t pt-6">在場車輛</h2>
+        <div id="onSiteList" class="space-y-3">
+            <!-- On-site vehicles will be dynamically added here -->
+        </div>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, collection, serverTimestamp, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- 設定 ---
+    const USER_PROVIDED_API_KEY = "AIzaSyCspWUkVA6STWgjrLeXVgg5JnWnJWTKAtU";
+    
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    let firebaseConfig;
+    let useTokenAuth = false;
+
+    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+        firebaseConfig = JSON.parse(__firebase_config);
+        useTokenAuth = true;
+    } else {
+        console.warn("未偵測到 Firebase 環境設定，將使用備用設定。");
+        firebaseConfig = {
+            apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
+            authDomain: "jy-2025.firebaseapp.com",
+            projectId: "jy-2025",
+            storageBucket: "jy-2025.appspot.com",
+            messagingSenderId: "640527461851",
+            appId: "1:640527461851:web:eed9f82d698275371fcbfe",
+            measurementId: "G-HVEVMTSR9L"
+        };
+    }
+    
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    const collectionPath = `/artifacts/${appId}/public/data/parking-records`;
+    
+    // --- DOM 元素 ---
+    const carPlateInput = document.getElementById('carPlate');
+    const huBeiInput = document.getElementById('huBei');
+    const addRecordBtn = document.getElementById('addRecordBtn');
+    const voiceBtn = document.getElementById('voiceBtn');
+    const cameraBtn = document.getElementById('cameraBtn');
+    const imageUpload = document.getElementById('imageUpload');
+    const statusMessage = document.getElementById('statusMessage');
+    const errorMessageEl = document.getElementById('error-message');
+    const errorText = document.getElementById('error-text');
+    const addBtnText = document.getElementById('addBtnText');
+    const addBtnSpinner = document.getElementById('addBtnSpinner');
+    const onSiteList = document.getElementById('onSiteList');
+
+    // --- 全域變數 ---
+    let db, auth;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+
+    // --- 住戶資料 ---
+    const allHuBeiList = [
+        '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓',
+        '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓',
+        '6A-6樓', '6B-6樓', '6C-6樓', '6D-6樓', '6E-6樓', '6F-6樓',
+        '5A-5樓', '5B-5樓', '5C-5樓', '5D-5樓', '5E-5樓', '5F-5樓',
+        '4A-4樓', '4B-4樓', '4CD-4樓', '4EF-4樓', '3A-3樓', '3B-3樓',
+        '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓',
+        '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
+    ];
+
+    // --- 核心功能 ---
+
+    function showError(message) {
+      errorText.textContent = message;
+      errorMessageEl.classList.remove('hidden');
+    }
+
+    function hideError() {
+      errorMessageEl.classList.add('hidden');
+    }
+
+    function findFullHuBei(shorthandInput) {
+        const input = String(shorthandInput).toUpperCase().trim();
+        if (!input) return shorthandInput;
+        if (input === 'VIP') return '貴賓';
+        const matchedHuBei = allHuBeiList.find(fullHuBei => fullHuBei.toUpperCase().startsWith(input));
+        return matchedHuBei || shorthandInput;
+    }
+
+    async function initializeFirebase() {
+      try {
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        if (useTokenAuth && initialAuthToken) {
+          await signInWithCustomToken(auth, initialAuthToken);
+        } else {
+          await signInAnonymously(auth);
+        }
+        setupRealtimeListener(); // Start listening after auth
+      } catch (e) {
+        console.error("Firebase Initialization failed:", e);
+        showError("無法連接至伺服器。");
+      }
+    }
+
+    function getApiKey() {
+        const key = USER_PROVIDED_API_KEY || firebaseConfig.apiKey;
+        if (!key) {
+            showError("錯誤：未設定 API 金鑰。");
+            return null;
+        }
+        return key;
+    }
+
+    // --- AI 功能: 語音辨識 ---
+    function setupSpeechRecognition() {
+      if (!SpeechRecognition) {
+        showError("您的瀏覽器不支援語音辨識功能。");
+        voiceBtn.disabled = true;
+        return;
+      }
+      recognition = new SpeechRecognition();
+      recognition.lang = 'zh-TW';
+      recognition.interimResults = false;
+
+      recognition.onstart = () => { statusMessage.textContent = '正在聆聽...'; };
+      recognition.onresult = async (event) => {
+        const speechResult = event.results[0][0].transcript;
+        statusMessage.textContent = `正在處理: "${speechResult}"`;
+        await parseSpeechWithAI(speechResult);
+      };
+      recognition.onend = () => {};
+      recognition.onerror = (event) => {
+        showError(`語音辨識錯誤: ${event.error}`);
+        statusMessage.textContent = '';
+      };
+    }
+
+    async function parseSpeechWithAI(text) {
+        const apiKey = getApiKey();
+        if (!apiKey) return;
+        try {
+            const prompt = `從以下這段中文語句中，提取出車牌號碼和戶別資訊。車牌號碼通常由英文字母和數字組成。戶別可能是樓層、房號，或是如"施工"、"貴賓"等特殊詞彙。請以JSON格式回傳，鍵值分別為 'carPlate' 和 'huBei'。語句: "${text}"`;
+            const payload = {
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: {
+                  responseMimeType: "application/json",
+                  responseSchema: {
+                      type: "OBJECT",
+                      properties: { "carPlate": { "type": "STRING" }, "huBei": { "type": "STRING" } },
+                      required: ["carPlate", "huBei"]
+                  }
+              }
+            };
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) { throw new Error(`API 請求失敗: ${response.status}.`); }
+            const result = await response.json();
+            if (result.candidates && result.candidates.length > 0) {
+                const part = result.candidates[0].content.parts[0];
+                const parsedJson = JSON.parse(part.text);
+                if (parsedJson.carPlate) { carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, ''); }
+                if (parsedJson.huBei) { huBeiInput.value = parsedJson.huBei.toUpperCase(); huBeiInput.dispatchEvent(new Event('blur')); }
+                statusMessage.textContent = 'AI 辨識完成！';
+            } else { throw new Error('無效的 AI 回應。'); }
+        } catch (error) {
+            console.error('AI 語音解析錯誤:', error);
+            showError(`AI 語音解析失敗: ${error.message}`);
+            statusMessage.textContent = '解析失敗，請手動輸入。';
+        } finally {
+            setTimeout(() => { if (statusMessage.textContent === 'AI 辨識完成！') statusMessage.textContent = ''; }, 2000);
+        }
+    }
+
+    // --- AI 功能: 圖像辨識 ---
+    async function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const apiKey = getApiKey();
+        if (!apiKey) return;
+        statusMessage.textContent = '正在辨識圖片...';
+        addRecordBtn.disabled = true;
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64ImageData = reader.result.split(',')[1];
+            try {
+                const prompt = "從這張圖片中辨識出車牌號碼，並以JSON格式回傳。車牌號碼的鍵是 'carPlate'。";
+                const payload = {
+                  contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64ImageData } } ] } ],
+                  generationConfig: {
+                      responseMimeType: "application/json",
+                      responseSchema: { type: "OBJECT", properties: { "carPlate": { "type": "STRING" } }, required: ["carPlate"] }
+                  }
+                };
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) { throw new Error(`API 請求失敗: ${response.status}.`); }
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0) {
+                    const part = result.candidates[0].content.parts[0];
+                    const parsedJson = JSON.parse(part.text);
+                    if (parsedJson.carPlate) {
+                        carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, '');
+                        statusMessage.textContent = '車牌辨識成功！';
+                    } else { throw new Error('AI 未能辨識出車牌。'); }
+                } else { throw new Error('無效的 AI 回應。'); }
+            } catch (error) {
+                console.error('AI 辨識錯誤:', error);
+                showError(`AI 辨識失敗: ${error.message}`);
+                statusMessage.textContent = '辨識失敗，請手動輸入。';
+            } finally {
+                addRecordBtn.disabled = false;
+                imageUpload.value = '';
+                setTimeout(() => { if (statusMessage.textContent === '車牌辨識成功！') statusMessage.textContent = ''; }, 2000);
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // --- 資料庫與畫面渲染 ---
+    function setupRealtimeListener() {
+      try {
+        const collectionRef = collection(db, collectionPath);
+        onSnapshot(collectionRef, (snapshot) => {
+          const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const onSiteRecords = allRecords.filter(record => !record.leaveTime);
+          onSiteRecords.sort((a, b) => (a.entryTime?.seconds || 0) - (b.entryTime?.seconds || 0));
+          renderOnSiteList(onSiteRecords);
+        });
+      } catch (e) {
+        console.error("Failed to set up Firestore listener:", e);
+        showError("設定數據監聽失敗。");
+      }
+    }
+
+    function renderOnSiteList(records) {
+        onSiteList.innerHTML = '';
+        if (records.length === 0) {
+            onSiteList.innerHTML = `<p class="text-gray-500 text-center text-sm">目前沒有在場車輛。</p>`;
+            return;
+        }
+        records.forEach(record => {
+            const recordEl = document.createElement('div');
+            recordEl.className = 'record-card';
+            recordEl.innerHTML = `
+              <div class="flex-grow">
+                <p class="font-bold text-base text-gray-800">${record.carPlate}</p>
+                <p class="text-sm text-gray-600">${record.huBei}</p>
+              </div>
+              <button data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
+                出場
+              </button>
+            `;
+            onSiteList.appendChild(recordEl);
+        });
+        document.querySelectorAll('.leave-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                leaveRecord(btn.dataset.id);
+            });
+        });
+    }
+
+    async function addRecord() {
+      const carPlate = carPlateInput.value.trim().toUpperCase();
+      const huBeiInputVal = huBeiInput.value.trim();
+      if (!carPlate || !huBeiInputVal) {
+        showError('車牌號碼和戶別不能為空。');
+        return;
+      }
+      hideError();
+      addBtnText.classList.add('hidden');
+      addBtnSpinner.classList.remove('hidden');
+      addRecordBtn.disabled = true;
+      const finalHuBei = findFullHuBei(huBeiInputVal);
+      try {
+        await setDoc(doc(collection(db, collectionPath)), {
+          carPlate: carPlate, huBei: finalHuBei,
+          entryTime: serverTimestamp(), leaveTime: null
+        });
+        carPlateInput.value = ''; huBeiInput.value = '';
+        statusMessage.textContent = '新增成功！';
+        setTimeout(() => statusMessage.textContent = '', 2000);
+      } catch (e) {
+        showError("新增記錄失敗，請檢查網路連線。");
+      } finally {
+        addBtnText.classList.remove('hidden');
+        addBtnSpinner.classList.add('hidden');
+        addRecordBtn.disabled = false;
+      }
+    }
+
+    async function leaveRecord(id) {
+        try {
+            await updateDoc(doc(db, collectionPath, id), { leaveTime: serverTimestamp() });
+            statusMessage.textContent = '出場登記成功！';
+            setTimeout(() => statusMessage.textContent = '', 2000);
+        } catch (e) {
+            showError("更新記錄失敗。請重試。");
+        }
+    }
+    
+    // --- PWA Service Worker ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js').then(registration => {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        }, err => {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+      });
+    }
+
+    // --- 事件監聽 ---
+    voiceBtn.addEventListener('click', () => { if (recognition) recognition.start(); });
+    cameraBtn.addEventListener('click', () => { imageUpload.click(); });
+    imageUpload.addEventListener('change', handleImageUpload);
+    huBeiInput.addEventListener('blur', () => {
+        if (huBeiInput.value.trim()) {
+            huBeiInput.value = findFullHuBei(huBeiInput.value);
+        }
+    });
+    addRecordBtn.addEventListener('click', addRecord);
+
+    // --- 初始化 ---
+    initializeFirebase();
+    setupSpeechRecognition();
+
+  </script>
+</body>
+</html>
