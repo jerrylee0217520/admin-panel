@@ -34,11 +34,15 @@
 <body class="p-4 sm:p-6 lg:p-8">
 
   <div class="max-w-7xl mx-auto">
-    <header class="mb-8">
+    <header class="mb-8 text-center">
       <h1 class="text-3xl font-bold text-gray-800">佳元松江社區 停車管理中心</h1>
-    </header>
+      <div class="mt-4">
+        <button id="auth-button" class="btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">登入 Google</button>
+      </div>
+      <p id="user-status" class="mt-2 text-sm text-gray-500">正在初始化...</p>
+      </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <main id="main-content" class="grid grid-cols-1 lg:grid-cols-3 gap-6 hidden">
       
       <div class="lg:col-span-1 flex flex-col gap-6">
         <div class="card p-6">
@@ -110,12 +114,13 @@
         </div>
       </div>
 
-    </div>
+    </main>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getFirestore, doc, setDoc, getDocs, collection, query, where, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; // NEW
 
     const firebaseConfig = {
       apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
@@ -125,9 +130,13 @@
       messagingSenderId: "640527461851",
       appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
+    
+    const ADMIN_UIDS = ["KcaxVmcqI3RzxWdhCl2dhVGPxti1"]; // NEW
 
     const App = {
       db: null,
+      auth: null, // NEW
+      user: null, // NEW
       elements: {},
       records: [],
       vehicles: [],
@@ -137,17 +146,19 @@
       init() {
         const app = initializeApp(firebaseConfig);
         this.db = getFirestore(app);
+        this.auth = getAuth(app); // NEW
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.initDatePicker();
-        this.fetchAndDisplayRecords(this.selectedDate);
-        this.listenForPresentVehicles();
+        this.initAuthWatcher(); // NEW
         this.initChart();
       },
 
       cacheDOMElements() {
         this.elements = {
+          authButton: document.getElementById('auth-button'), // NEW
+          userStatus: document.getElementById('user-status'), // NEW
+          mainContent: document.getElementById('main-content'), // NEW
           newRecordForm: document.getElementById('new-record-form'),
           licensePlateInput: document.getElementById('license-plate-input'),
           unitInput: document.getElementById('unit-input'),
@@ -163,6 +174,7 @@
       },
 
       bindEvents() {
+        this.elements.authButton.addEventListener('click', () => this.handleAuth()); // NEW
         this.elements.newRecordForm.addEventListener('submit', (e) => this.addRecord(e));
         this.elements.vehiclesPresentContainer.addEventListener('click', (e) => {
           if (e.target.tagName === 'BUTTON') {
@@ -173,6 +185,56 @@
         this.elements.exportCsvBtn.addEventListener('click', () => this.exportToCsv());
         this.elements.datePickerInput.addEventListener('change', (e) => this.fetchAndDisplayRecords(e.target.value));
       },
+      
+      // ##### NEW Authentication Functions #####
+      initAuthWatcher() {
+        onAuthStateChanged(this.auth, (user) => {
+          this.user = user;
+          this.updateAuthUI();
+        });
+      },
+
+      async handleAuth() {
+        if (this.user) {
+          await signOut(this.auth);
+        } else {
+          const provider = new GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: 'select_account' });
+          try {
+            await signInWithPopup(this.auth, provider);
+          } catch (error) {
+            console.error("登入失敗:", error);
+            alert("Google 登入失敗，請檢查 Console。");
+          }
+        }
+      },
+      
+      updateAuthUI() {
+        if (this.user && ADMIN_UIDS.includes(this.user.uid)) {
+          // Admin is logged in
+          this.elements.userStatus.textContent = `管理員已登入: ${this.user.displayName || this.user.email}`;
+          this.elements.authButton.textContent = '登出';
+          this.elements.mainContent.classList.remove('hidden');
+          // Start loading data only after successful login
+          if (!this.selectedDate) { // Load only on first successful login
+            this.initDatePicker();
+            this.fetchAndDisplayRecords(this.selectedDate);
+            this.listenForPresentVehicles();
+          }
+        } else if (this.user) {
+          // Non-admin user is logged in
+           this.elements.userStatus.textContent = `登入身份: ${this.user.displayName || this.user.email} (非管理員，無權限)`;
+           this.elements.authButton.textContent = '登出';
+           this.elements.mainContent.classList.add('hidden');
+        }
+        else {
+          // User is logged out
+          this.elements.userStatus.textContent = '請使用管理員帳號登入以繼續。';
+          this.elements.authButton.textContent = '登入 Google';
+          this.elements.mainContent.classList.add('hidden');
+        }
+      },
+      // ##### End of Authentication Functions #####
       
       initDatePicker() {
           this.selectedDate = new Date().toISOString().split('T')[0];
@@ -200,27 +262,24 @@
         });
       },
 
-      // ##### NEW: Centralized Error Handling Function #####
       handleFirestoreError(error, element, type = 'table') {
         console.error("Firestore Error:", error);
         let userMessage = "讀取資料時發生未知錯誤。";
-
         switch (error.code) {
             case 'failed-precondition':
                 userMessage = "讀取失敗：缺少資料庫索引。請按 F12 打開 Console，點擊錯誤訊息中的連結來自動建立。";
                 break;
             case 'permission-denied':
-                userMessage = "讀取失敗：權限不足。請檢查 Firebase 安全規則設定。";
+                userMessage = "讀取失敗：權限不足。請登入管理員帳號，或檢查 Firebase 安全規則設定。";
                 break;
             case 'unavailable':
                 userMessage = "讀取失敗：無法連線至資料庫，請檢查您的網路連線。";
                 break;
         }
-
         if (type === 'table') {
-            const colspan = this.elements.recordsTableBody.parentElement.querySelector('thead tr').childElementCount;
+            const colspan = 6;
             element.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-red-500 py-4">${userMessage}</td></tr>`;
-        } else { // 'div'
+        } else {
             element.innerHTML = `<div class="p-3 bg-red-100 text-red-700 rounded-lg">${userMessage}</div>`;
         }
       },
@@ -252,7 +311,6 @@
       listenForPresentVehicles() {
         const recordsRef = collection(this.db, 'parking_records');
         const q = query(recordsRef, where("status", "==", "present"));
-        
         onSnapshot(q, 
           (snapshot) => {
             this.vehicles = [];
@@ -273,14 +331,12 @@
           this.elements.recordsTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-4">該日期無停車記錄。</td></tr>`;
           return;
         }
-
         recordsToDisplay.forEach(record => {
           const entry = new Date(record.entryTime);
           const exit = record.exitTime ? new Date(record.exitTime) : null;
           const duration = exit ? Math.round((exit - entry) / 60000) : '-';
           const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '-';
           const spotDisplayText = record.spotNumber ? record.spotNumber : '無';
-          
           const row = `
             <tr>
               <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${record.licensePlate}</td>
@@ -344,25 +400,18 @@
         const plate = this.elements.licensePlateInput.value.trim().toUpperCase();
         const unit = this.elements.unitInput.value.trim();
         const spotNumber = this.elements.spotNumberInput.value.trim();
-
         if (!plate || !unit) {
           alert('車牌和戶別為必填項。');
           return;
         }
-
         const now = new Date();
         const newRecord = {
-          licensePlate: plate,
-          unit: unit,
-          spotNumber: spotNumber,
+          licensePlate: plate, unit: unit, spotNumber: spotNumber,
           entryTime: now.toISOString(),
           entryDate: now.toISOString().split('T')[0],
-          exitTime: null,
-          status: 'present'
+          exitTime: null, status: 'present'
         };
-
         const docId = `${newRecord.entryDate}_${plate.replace(/[^a-zA-Z0-9]/g, '')}`;
-        
         try {
           await setDoc(doc(this.db, 'parking_records', docId), newRecord);
           this.elements.newRecordForm.reset();
@@ -379,7 +428,6 @@
         if (!docId) return;
         const now = new Date();
         const recordRef = doc(this.db, 'parking_records', docId);
-        
         try {
           await updateDoc(recordRef, {
             exitTime: now.toISOString(),
@@ -397,20 +445,16 @@
             alert('沒有記錄可匯出。');
             return;
         }
-
         let csvContent = "\uFEFF";
         csvContent += "車牌號碼,戶別,車位編號,入場時間,出場時間,停放時長\n";
-
         this.records.forEach(record => {
             const entry = new Date(record.entryTime);
             const exit = record.exitTime ? new Date(record.exitTime) : null;
             const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '';
             const duration = exit ? Math.round((exit - entry) / 60000) : '';
             const spotCsvText = record.spotNumber ? record.spotNumber : '無';
-
             csvContent += `${record.licensePlate},${record.unit},${spotCsvText},${formatTime(entry)},${formatTime(exit)},${duration}\n`;
         });
-        
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
