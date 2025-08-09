@@ -2,615 +2,393 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <title>佳元松江社區 停車管理中心</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>停車管理中心</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
-    /* Custom scrollbar styles */
-    ::-webkit-scrollbar {
-      width: 8px;
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: #f0f2f5;
     }
-    ::-webkit-scrollbar-track {
-      background: #f5f6fa;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #c5d0d8;
-      border-radius: 4px;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: linear-gradient(135deg, #e9edf2, #d9e2ec);
-      font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
-      color: #333;
-    }
-    .record-card {
-      background-color: #ffffff;
-      border: 1px solid #e2e8f0;
+    .card {
+      background-color: white;
       border-radius: 0.75rem;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      padding: 1rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      transition: all 0.3s ease-in-out;
+    }
+    .card:hover {
+        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+    .btn {
       transition: all 0.2s ease-in-out;
     }
-    .record-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+    .btn:hover {
+      transform: translateY(-2px);
     }
-    .log-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    .log-table th, .log-table td {
-        padding: 0.75rem 1rem;
-        text-align: left;
-        border-bottom: 1px solid #e2e8f0;
-    }
-    .log-table th {
-        background-color: #f8fafc;
-        font-weight: 600;
-        color: #475569;
-    }
-    .log-table tr:last-child td {
-        border-bottom: none;
-    }
-    .log-table tr.is-left {
-        color: #64748b;
-        background-color: #fdfdfe;
-    }
-    .status-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 0.5rem;
-    }
-    .status-dot.parked-owner { background-color: #3b82f6; /* 藍色 */ }
-    .status-dot.parked-temp { background-color: #ef4444; /* 紅色 */ }
-    .status-dot.parked-construction { background-color: #fbbf24; /* 黃色 */ }
-    .status-dot.parked-vip { background-color: #8b5cf6; /* 紫色 */ }
-    
-    .modal-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.5);
-      display: none; justify-content: center; align-items: center;
-      z-index: 1000;
-      transition: opacity 0.3s ease;
-    }
-    .modal-content {
-      background: white; padding: 2rem; border-radius: 1rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-      max-width: 90%;
-      width: 400px;
-    }
-  
-    .log-table thead th { position: sticky; top: 0; z-index: 1; }
-    .log-table tbody tr:nth-child(odd) { background-color: #fafbfc; }
-    .badge {
-      display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px;
-      background:#eef6ff; color:#1d4ed8; border:1px solid #dbeafe;
-    }
-    .badge.gray { background:#f5f5f5; color:#4b5563; border-color:#e5e7eb; }
-    
   </style>
 </head>
-<body class="antialiased p-4">
-  <div class="max-w-6xl mx-auto bg-white p-6 sm:p-8 rounded-xl shadow-lg mt-8">
-    <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">佳元松江社區 停車管理中心</h1>
-    
-    <div id="loading" class="text-center text-gray-500">
-      <div class="flex justify-center items-center">
-        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <span>載入中...</span>
-      </div>
-    </div>
+<body class="p-4 sm:p-6 lg:p-8">
 
-    <div id="error-message" class="text-red-500 text-center mb-4 hidden"></div>
+  <div class="max-w-7xl mx-auto">
+    <header class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-800">佳元松江社區 停車管理中心</h1>
+    </header>
 
-    <div id="content" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <!-- Left Column: Add Record & On-site List -->
-      <div class="lg:col-span-1 space-y-8">
-        <div class="border p-4 rounded-xl shadow-inner bg-gray-50">
-          <h2 class="text-xl font-bold text-gray-700 mb-4 text-center">新增停車記錄</h2>
-          <div class="space-y-4">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <div class="lg:col-span-1 flex flex-col gap-6">
+        <div class="card p-6">
+          <h2 class="text-xl font-bold mb-4">新增停車記錄</h2>
+          <form id="new-record-form" class="space-y-4">
             <div>
-              <label for="carPlate" class="block text-sm font-medium text-gray-700">車牌號碼:</label>
-              <input type="text" id="carPlate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-2 uppercase" placeholder="ABC-1234">
+              <label for="license-plate-input" class="block text-sm font-medium text-gray-700">車牌號碼:</label>
+              <input type="text" id="license-plate-input" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="ABC-1234">
             </div>
             <div>
-              <label for="huBei" class="block text-sm font-medium text-gray-700">戶別:</label>
-              <input type="text" id="huBei" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-2 uppercase" placeholder="例如: 5C, 施工, 或貴賓">
+              <label for="unit-input" class="block text-sm font-medium text-gray-700">戶別:</label>
+              <input type="text" id="unit-input" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="例如: 5C, 施工, 或貴賓">
             </div>
-            <button id="addRecordBtn" class="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">新增停車</button>
-          </div>
+            <button type="submit" class="w-full btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
+              新增停車
+            </button>
+          </form>
         </div>
-        
-        <div>
-          <h2 class="text-xl font-bold text-gray-700 mb-4 text-center">在場車輛</h2>
-          <div id="parking-list" class="space-y-3">
-            <!-- On-site vehicles will be dynamically added here -->
-          </div>
+
+        <div class="card p-6">
+          <h2 class="text-xl font-bold mb-4">在場車輛</h2>
+          <div id="vehicles-present-container" class="space-y-3">
+            <p class="text-gray-500">目前沒有在場車輛。</p>
+            </div>
         </div>
       </div>
 
-      <!-- Right Column: Full Day Log & Charts -->
-      <div class="lg:col-span-2 space-y-8">
-        <div>
-            <h2 class="text-xl font-bold text-gray-700 mb-4 text-center">數據分析</h2>
-            <div class="bg-gray-50 p-4 rounded-xl shadow-inner">
-                <canvas id="hourlyChart" style="height: 250px;"></canvas>
+      <div class="lg:col-span-2 flex flex-col gap-6">
+        <div class="card p-6">
+            <h2 class="text-xl font-bold mb-4">數據分析</h2>
+            <p class="text-sm text-gray-600 mb-4">今日各時段入場車流量分析</p>
+            <div class="h-64">
+              <canvas id="entry-time-chart"></canvas>
             </div>
         </div>
-        <div>
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold text-gray-700">今日停車總紀錄</h2>
-            <input type="text" id="searchInput" placeholder="搜尋車牌或戶別..." class="w-full max-w-xs p-2 border rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
-          </div>
-          <div class="bg-white rounded-xl shadow-md overflow-hidden">
-              <div id="full-log-list" class="overflow-x-auto">
-                  <!-- Full log table will be dynamically added here -->
+        <div class="card p-6">
+          <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+              <h2 class="text-xl font-bold">今日停車總記錄</h2>
+              <div class="w-full sm:w-auto">
+                  <input type="text" id="search-input" class="w-full sm:w-64 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="搜尋車牌或戶別...">
               </div>
           </div>
-          <div class="mt-4 flex justify-end">
-              <button id="exportCsvBtn" class="py-2 px-4 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition shadow-sm">
-                匯出今日記錄 (CSV)
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車牌號碼</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">戶別</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入場時間</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">出場時間</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">停放時長 (分)</th>
+                </tr>
+              </thead>
+              <tbody id="records-table-body" class="bg-white divide-y divide-gray-200">
+                </tbody>
+            </table>
+          </div>
+          <div class="mt-6 text-right">
+              <button id="export-csv-btn" class="btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+                  匯出今日記錄 (CSV)
               </button>
           </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- Remove confirmation modal -->
-  <div id="removeModal" class="modal-overlay">
-    <div class="modal-content text-center">
-      <h3 class="text-lg font-bold mb-4">確認移除</h3>
-      <p>您確定要永久移除這筆停車記錄嗎？<br>此操作無法復原。</p>
-      <div class="mt-6 flex justify-center space-x-4">
-        <button id="cancelRemoveBtn" class="py-2 px-4 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200 transition">取消</button>
-        <button id="confirmRemoveBtn" class="py-2 px-4 rounded-lg bg-red-600 text-white hover:bg-red-700 transition">確定移除</button>
-      </div>
     </div>
   </div>
 
   <script type="module">
+    // Firebase Imports
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot, collection, deleteDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // --- 設定 ---
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    let firebaseConfig;
-    let useTokenAuth = false;
-
-    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-        firebaseConfig = JSON.parse(__firebase_config);
-        useTokenAuth = true;
-    } else {
-        console.warn("未偵測到 Firebase 環境設定，將使用備用設定。");
-        firebaseConfig = {
-            apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
-            authDomain: "jy-2025.firebaseapp.com",
-            projectId: "jy-2025",
-            storageBucket: "jy-2025.appspot.com",
-            messagingSenderId: "640527461851",
-            appId: "1:640527461851:web:eed9f82d698275371fcbfe",
-            measurementId: "G-HVEVMTSR9L"
-        };
-    }
-    
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-    const collectionPath = `/artifacts/${appId}/public/data/parking-records`;
-    
-    // --- DOM 元素 ---
-    const carPlateInput = document.getElementById('carPlate');
-    const huBeiInput = document.getElementById('huBei');
-    const addRecordBtn = document.getElementById('addRecordBtn');
-    const parkingList = document.getElementById('parking-list');
-    const fullLogList = document.getElementById('full-log-list');
-    const loadingEl = document.getElementById('loading');
-    const errorMessageEl = document.getElementById('error-message');
-    const exportCsvBtn = document.getElementById('exportCsvBtn');
-    const removeModal = document.getElementById('removeModal');
-    const confirmRemoveBtn = document.getElementById('confirmRemoveBtn');
-    const cancelRemoveBtn = document.getElementById('cancelRemoveBtn');
-    const searchInput = document.getElementById('searchInput');
-
-    // --- 全域變數與圖表實例 ---
-    let db, auth, userId;
-    let allRecords = [];
-    let todayRecords = [];
-    let hourlyChartInstance = null;
-
-    // --- 住戶資料 (與儀表板同步) ---
-    const residentParkingMap = {
-        '10B-10樓': 'B2-05', '9A-9樓': 'B2/13', '9B-9樓': 'B2-09',
-        '8A-8樓': 'B2/08', '7A-7樓': 'B2/01', '6B-6樓': 'B2-06',
-        '6D-6樓': 'B2-02', '5C-5樓': 'B2-14', '5E-5樓': 'B2-07',
-        '4B-4樓': 'B2-03', '4EF-4樓': 'B2-04', '3CD-3樓': 'B2-10',
-        '1A-1樓': 'B2/11', '1B-1樓': 'B2-12'
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
+      authDomain: "jy-2025.firebaseapp.com",
+      projectId: "jy-2025",
+      storageBucket: "jy-2025.appspot.com",
+      messagingSenderId: "640527461851",
+      appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
-    const allHuBeiList = [
-        '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓',
-        '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓',
-        '6A-6樓', '6B-6樓', '6C-6樓', '6D-6樓', '6E-6樓', '6F-6樓',
-        '5A-5樓', '5B-5樓', '5C-5樓', '5D-5樓', '5E-5樓', '5F-5樓',
-        '4A-4樓', '4B-4樓', '4CD-4樓', '4EF-4樓', '3A-3樓', '3B-3樓',
-        '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓',
-        '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
-    ];
-    
-    function normalizeHuBeiKey(h) {
-        if (!h) return '';
-        const str = String(h).trim();
-        // unify common aliases
-        if (str.toUpperCase() === 'VIP') return '貴賓';
-        return findFullHuBei(str);
-    }
-    function getPurchasedSpot(huBei) {
-        const key = normalizeHuBeiKey(huBei);
-        const spot = residentParkingMap[key];
-        return spot ? spot : '無';
-    }
-    
-    
-    // --- 核心功能 ---
 
-    function showError(message) {
-      errorMessageEl.textContent = message;
-      errorMessageEl.classList.remove('hidden');
-    }
-    
-    function findFullHuBei(shorthandInput) {
-        const input = String(shorthandInput).toUpperCase().trim();
-        if (!input) return shorthandInput;
-        
-        // FIX: Special mapping for VIP to normalize input
-        if (input === 'VIP') {
-            return '貴賓';
-        }
+    const App = {
+      db: null,
+      elements: {},
+      records: [],
+      vehicles: [],
+      entryTimeChart: null,
 
-        const matchedHuBei = allHuBeiList.find(fullHuBei => fullHuBei.toUpperCase().startsWith(input));
-        return matchedHuBei || shorthandInput;
-    }
-
-    async function initializeAppAndAuth() {
-      loadingEl.classList.remove('hidden');
-      try {
+      init() {
         const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
-        if (useTokenAuth && initialAuthToken) {
-          await signInWithCustomToken(auth, initialAuthToken);
-        } else {
-          await signInAnonymously(auth);
-        }
-        onAuthStateChanged(auth, (user) => {
-          if (user) {
-            userId = user.uid;
-            setupRealtimeListener();
-          } else {
-            showError('無法驗證使用者。');
+        this.db = getFirestore(app);
+        
+        this.cacheDOMElements();
+        this.bindEvents();
+        this.loadAndDisplayRecords();
+        this.listenForPresentVehicles();
+        this.initChart();
+      },
+
+      cacheDOMElements() {
+        this.elements = {
+          newRecordForm: document.getElementById('new-record-form'),
+          licensePlateInput: document.getElementById('license-plate-input'),
+          unitInput: document.getElementById('unit-input'),
+          vehiclesPresentContainer: document.getElementById('vehicles-present-container'),
+          recordsTableBody: document.getElementById('records-table-body'),
+          searchInput: document.getElementById('search-input'),
+          exportCsvBtn: document.getElementById('export-csv-btn'),
+          chartCanvas: document.getElementById('entry-time-chart'),
+        };
+      },
+
+      bindEvents() {
+        this.elements.newRecordForm.addEventListener('submit', (e) => this.addRecord(e));
+        this.elements.vehiclesPresentContainer.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON') {
+            this.checkOut(e.target.dataset.id);
           }
         });
-      } catch (e) {
-        console.error("Initialization failed:", e);
-        showError("應用程式初始化失敗，請檢查網路連線。");
-        loadingEl.classList.add('hidden');
-      }
-    }
-
-    function setupRealtimeListener() {
-      try {
-        const collectionRef = collection(db, collectionPath);
-        onSnapshot(collectionRef, (snapshot) => {
-          allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          filterAndRenderViews();
-          loadingEl.classList.add('hidden');
-          document.getElementById('content').classList.remove('hidden');
-        }, (error) => {
-          console.error("Failed to listen to Firestore:", error);
-          showError("無法即時更新停車記錄。");
-        });
-      } catch (e) {
-        console.error("Failed to set up Firestore listener:", e);
-        showError("設定數據監聽失敗。");
-      }
-    }
-
-    function filterAndRenderViews() {
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-
-        todayRecords = allRecords.filter(record => 
-            record.entryTime && record.entryTime.toDate() >= todayStart
-        );
-        todayRecords.sort((a, b) => (b.entryTime?.seconds || 0) - (a.entryTime?.seconds || 0));
-
-        const searchTerm = searchInput.value.toUpperCase().trim();
-        const filteredLogRecords = searchTerm
-            ? todayRecords.filter(record => 
-                record.carPlate.toUpperCase().includes(searchTerm) ||
-                record.huBei.toUpperCase().includes(searchTerm)
-              )
-            : todayRecords;
-        
-        renderParkingList(todayRecords.filter(record => !record.leaveTime));
-        renderFullLog(filteredLogRecords);
-        renderCharts(todayRecords);
-    }
-    
-    function renderParkingList(records) {
-      parkingList.innerHTML = '';
-      if (records.length === 0) {
-        parkingList.innerHTML = `<p class="text-gray-500 text-center text-sm">目前沒有在場車輛。</p>`;
-        return;
-      }
-      records.forEach(record => {
-        const recordEl = document.createElement('div');
-        recordEl.className = 'record-card';
-        
-        const entryTime = record.entryTime.toDate();
-        const now = new Date();
-        const durationHours = (now - entryTime) / 3600000;
-        const isLongParking = durationHours >= 8;
-
-        
-recordEl.innerHTML = `
-  <div class="flex-grow">
-    <p class="font-bold text-base text-gray-800">${record.carPlate}</p>
-    <p class="text-sm text-gray-600">${record.huBei}</p>
-    <div class="mt-1">
-      <span class="badge ${getPurchasedSpot(record.huBei) === '無' ? 'gray' : ''}">
-        購買車位：${getPurchasedSpot(record.huBei)}
-      </span>
-    </div>
-    ${isLongParking ? `<p class="text-xs text-red-500 font-bold mt-1">⚠️ 超時停車 (${Math.floor(durationHours)}小時)</p>` : ''}
-  </div>
-  <button data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
-    出場
-  </button>
-`;
-parkingList.appendChild(recordEl);
-      });
-      document.querySelectorAll('.leave-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            leaveRecord(btn.dataset.id);
-        });
-      });
-    }
-
-    function calculateDuration(entryTime, leaveTime) {
-        if (!entryTime) return 'N/A';
-        const start = entryTime.toDate();
-        const end = leaveTime ? leaveTime.toDate() : new Date();
-        let diffMs = end - start;
-        if (diffMs < 0) diffMs = 0;
-        const hours = Math.floor(diffMs / 3600000);
-        const minutes = Math.floor((diffMs % 3600000) / 60000);
-        let durationString = '';
-        if (hours > 0) durationString += `${hours} 小時 `;
-        durationString += `${minutes} 分鐘`;
-        return durationString;
-    }
-
-    function renderFullLog(records) {
-        if (records.length === 0) {
-            fullLogList.innerHTML = `<p class="text-gray-500 text-center p-4">今日尚無停車記錄。</p>`;
-            return;
-        }
-        
-        const tableHeader = `
-            <table class="log-table">
-                <thead>
-                    <tr>
-                        <th>狀態</th>
-                        <th>車牌</th>
-                        <th>戶別</th>
-                        <th>購買車位</th>
-                        <th>入場時間</th>
-                        <th>出場時間</th>
-                        <th>停放時長</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        const tableFooter = `</tbody></table>`;
-        
-        const tableRows = records.map(record => {
-            const isLeft = !!record.leaveTime;
-            const entryTimeStr = record.entryTime ? record.entryTime.toDate().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
-            const leaveTimeStr = isLeft ? record.leaveTime.toDate().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '-';
-            const duration = calculateDuration(record.entryTime, record.leaveTime);
-
-            const huBeiUpper = record.huBei ? record.huBei.toUpperCase() : '';
-            const isConstruction = huBeiUpper.includes('施工');
-            const isVip = huBeiUpper === '貴賓' || huBeiUpper === 'VIP';
-            const isOwnerWithSpot = !!residentParkingMap[normalizeHuBeiKey(record.huBei)];
-            const purchasedSpot = getPurchasedSpot(record.huBei);
-            
-            let statusDotClass, huBeiStatusText;
-            if (isConstruction) {
-                statusDotClass = 'parked-construction';
-                huBeiStatusText = '施工';
-            } else if (isVip) {
-                statusDotClass = 'parked-vip';
-                huBeiStatusText = '貴賓訪客';
-            } else if (isOwnerWithSpot) {
-                statusDotClass = 'parked-owner';
-                huBeiStatusText = '屋主(有車位)';
-            } else {
-                statusDotClass = 'parked-temp';
-                huBeiStatusText = '訪客(無車位)';
-            }
-
-            return `
-                <tr class="${isLeft ? 'is-left' : ''}">
-                    <td><span class="status-dot ${statusDotClass}"></span>${isLeft ? '已離場' : '在場'}</td>
-                    <td>${record.carPlate}</td>
-                    <td><span class="font-bold">${record.huBei}</span><br><span class="text-xs text-gray-500">${huBeiStatusText}</span></td>
-                    <td>${purchasedSpot}</td>
-                    <td>${entryTimeStr}</td>
-                    <td>${leaveTimeStr}</td>
-                    <td>${duration}</td>
-                    <td><button data-id="${record.id}" class="delete-btn text-red-500 hover:text-red-700 transition duration-150 text-sm font-bold">✕</button></td>
-                </tr>
-            `;
-        }).join('');
-    
-        return `
-                <tr class="${isLeft ? 'is-left' : ''}">
-                    <td><span class="status-dot ${statusDotClass}"></span>${isLeft ? '已離場' : '在場'}</td>
-                    <td>${record.carPlate}</td>
-                    <td><span class="font-bold">${record.huBei}</span><br><span class="text-xs text-gray-500">${huBeiStatusText}</span></td>
-                    <td>${entryTimeStr}</td>
-                    <td>${leaveTimeStr}</td>
-                    <td>${duration}</td>
-                    <td><button data-id="${record.id}" class="delete-btn text-red-500 hover:text-red-700 transition duration-150 text-sm font-bold">✕</button></td>
-                </tr>
-            `;
-        }).join('');
-
-        fullLogList.innerHTML = tableHeader + tableRows + tableFooter;
-        
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                showRemoveModal(btn.dataset.id);
-            });
-        });
-    }
-
-    function renderCharts(records) {
-        const hourlyData = Array(24).fill(0);
-        records.forEach(record => {
-            if (record.entryTime) {
-                const hour = record.entryTime.toDate().getHours();
-                hourlyData[hour]++;
-            }
-        });
-        
-        const ctxHourly = document.getElementById('hourlyChart').getContext('2d');
-        if (hourlyChartInstance) {
-            hourlyChartInstance.data.datasets[0].data = hourlyData;
-            hourlyChartInstance.update();
-        } else {
-            hourlyChartInstance = new Chart(ctxHourly, {
-                type: 'bar',
-                data: {
-                    labels: Array.from({length: 24}, (_, i) => `${i}時`),
-                    datasets: [{
-                        label: '每小時入場次數',
-                        data: hourlyData,
-                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                        borderColor: 'rgba(59, 130, 246, 1)',
-                        borderWidth: 1,
-                        borderRadius: 4
-                    }]
+        this.elements.searchInput.addEventListener('input', (e) => this.filterRecords(e.target.value));
+        this.elements.exportCsvBtn.addEventListener('click', () => this.exportToCsv());
+      },
+      
+      initChart() {
+        const ctx = this.elements.chartCanvas.getContext('2d');
+        const labels = Array.from({ length: 24 }, (_, i) => `${i}時`);
+        this.entryTimeChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '入場車輛數',
+                    data: new Array(24).fill(0),
+                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        title: { display: true, text: '今日各時段入場車流量分析' }
-                    },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                plugins: {
+                    legend: {
+                        display: false
                     }
                 }
+            }
+        });
+      },
+
+      async loadAndDisplayRecords() {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const recordsRef = collection(this.db, 'parking_records');
+        const q = query(recordsRef, where("entryDate", "==", todayStr));
+
+        onSnapshot(q, (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+                const data = { id: change.doc.id, ...change.doc.data() };
+                if (change.type === "added") {
+                    this.records.unshift(data);
+                }
+                if (change.type === "modified") {
+                    const index = this.records.findIndex(rec => rec.id === data.id);
+                    if (index > -1) this.records[index] = data;
+                }
+                if (change.type === "removed") {
+                    this.records = this.records.filter(rec => rec.id !== data.id);
+                }
             });
-        }
-    }
-
-    async function addRecord() {
-      const carPlate = carPlateInput.value.trim().toUpperCase();
-      const huBeiInputVal = huBeiInput.value.trim();
-      if (!carPlate || !huBeiInputVal) {
-        showError('車牌號碼和戶別不能為空。');
-        return;
-      }
-      const finalHuBei = findFullHuBei(huBeiInputVal);
-      try {
-        await setDoc(doc(collection(db, collectionPath)), {
-          carPlate: carPlate, huBei: finalHuBei,
-          entryTime: serverTimestamp(), leaveTime: null
+            this.records.sort((a,b) => b.entryTime.localeCompare(a.entryTime));
+            this.displayRecords();
+            this.updateChart();
         });
-        carPlateInput.value = ''; huBeiInput.value = '';
-      } catch (e) {
-        showError("新增記錄失敗。請重試。");
-      }
-    }
+      },
 
-    async function leaveRecord(id) {
+      listenForPresentVehicles() {
+        const recordsRef = collection(this.db, 'parking_records');
+        const q = query(recordsRef, where("status", "==", "present"));
+        onSnapshot(q, (snapshot) => {
+            this.vehicles = [];
+            snapshot.forEach(doc => {
+                this.vehicles.push({ id: doc.id, ...doc.data() });
+            });
+            this.displayPresentVehicles();
+        });
+      },
+
+      displayRecords(recordsToDisplay = this.records) {
+        this.elements.recordsTableBody.innerHTML = '';
+        if (recordsToDisplay.length === 0) {
+          this.elements.recordsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-gray-500 py-4">今日尚無停車記錄。</td></tr>`;
+          return;
+        }
+
+        recordsToDisplay.forEach(record => {
+          const entry = new Date(record.entryTime);
+          const exit = record.exitTime ? new Date(record.exitTime) : null;
+          const duration = exit ? Math.round((exit - entry) / 60000) : '-';
+          const exitTimeStr = exit ? `${exit.getHours().toString().padStart(2, '0')}:${exit.getMinutes().toString().padStart(2, '0')}` : '-';
+
+          const row = `
+            <tr>
+              <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${record.licensePlate}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${record.unit}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${entry.getHours().toString().padStart(2, '0')}:${entry.getMinutes().toString().padStart(2, '0')}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${exitTimeStr}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${duration}</td>
+            </tr>`;
+          this.elements.recordsTableBody.insertAdjacentHTML('beforeend', row);
+        });
+      },
+
+      displayPresentVehicles() {
+          this.elements.vehiclesPresentContainer.innerHTML = '';
+          if (this.vehicles.length === 0) {
+              this.elements.vehiclesPresentContainer.innerHTML = '<p class="text-gray-500">目前沒有在場車輛。</p>';
+              return;
+          }
+          this.vehicles.forEach(v => {
+              const entry = new Date(v.entryTime);
+              const timeStr = `${entry.getHours().toString().padStart(2, '0')}:${entry.getMinutes().toString().padStart(2, '0')}`;
+              const vehicleHTML = `
+                <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
+                    <div>
+                        <p class="font-bold text-gray-800">${v.licensePlate}</p>
+                        <p class="text-sm text-gray-600">${v.unit} - 入場於 ${timeStr}</p>
+                    </div>
+                    <button data-id="${v.id}" class="btn bg-red-500 hover:bg-red-600 text-white text-sm font-bold py-1 px-3 rounded-md">出場</button>
+                </div>
+              `;
+              this.elements.vehiclesPresentContainer.insertAdjacentHTML('beforeend', vehicleHTML);
+          });
+      },
+      
+      updateChart() {
+        const hourlyCounts = new Array(24).fill(0);
+        this.records.forEach(record => {
+            const entryHour = new Date(record.entryTime).getHours();
+            hourlyCounts[entryHour]++;
+        });
+        this.entryTimeChart.data.datasets[0].data = hourlyCounts;
+        this.entryTimeChart.update();
+      },
+
+      filterRecords(searchTerm) {
+          const lowerCaseSearch = searchTerm.toLowerCase();
+          if (!lowerCaseSearch) {
+              this.displayRecords(this.records);
+              return;
+          }
+          const filtered = this.records.filter(r => 
+              r.licensePlate.toLowerCase().includes(lowerCaseSearch) ||
+              r.unit.toLowerCase().includes(lowerCaseSearch)
+          );
+          this.displayRecords(filtered);
+      },
+
+      async addRecord(e) {
+        e.preventDefault();
+        const plate = this.elements.licensePlateInput.value.trim().toUpperCase();
+        const unit = this.elements.unitInput.value.trim();
+
+        if (!plate || !unit) {
+          alert('車牌和戶別為必填項。');
+          return;
+        }
+
+        const now = new Date();
+        const newRecord = {
+          licensePlate: plate,
+          unit: unit,
+          entryTime: now.toISOString(),
+          entryDate: now.toISOString().split('T')[0],
+          exitTime: null,
+          status: 'present' // 'present' or 'departed'
+        };
+
+        const docId = `${newRecord.entryDate}_${plate}`;
+        
         try {
-            await updateDoc(doc(db, collectionPath, id), { leaveTime: serverTimestamp() });
-        } catch (e) {
-            showError("更新記錄失敗。請重試。");
+          await setDoc(doc(this.db, 'parking_records', docId), newRecord);
+          this.elements.newRecordForm.reset();
+        } catch (error) {
+          console.error("新增記錄失敗: ", error);
+          alert('新增記錄失敗，請檢查網路連線或稍後再試。');
         }
-    }
+      },
 
-    async function deleteRecord(id) {
-      try {
-        await deleteDoc(doc(db, collectionPath, id));
-      } catch (e) {
-        showError("刪除記錄失敗。請重試。");
-      }
-    }
+      async checkOut(docId) {
+        if (!docId) return;
+        const now = new Date();
+        const recordRef = doc(this.db, 'parking_records', docId);
+        
+        try {
+          // Use updateDoc instead of setDoc with merge to avoid overwriting
+          const { updateDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+          await updateDoc(recordRef, {
+            exitTime: now.toISOString(),
+            status: 'departed'
+          });
+        } catch (error) {
+            console.error("更新出場時間失敗: ", error);
+            alert('更新出場時間失敗，請檢查網路連線或稍後再試。');
+        }
+      },
 
-    function showRemoveModal(id) {
-        removeModal.style.display = 'flex';
-        confirmRemoveBtn.onclick = () => {
-            deleteRecord(id);
-            removeModal.style.display = 'none';
-        };
-        cancelRemoveBtn.onclick = () => {
-            removeModal.style.display = 'none';
-        };
-    }
-    
-    function downloadCsv(data, filename) {
-        const csvRows = [["車牌號碼", "戶別", "購買車位", "入場時間", "出場時間", "停放時長(分鐘)"]];
-        data.forEach(row => {
-            const entryTime = row.entryTime ? row.entryTime.toDate().toLocaleString('zh-TW', { hour12: false }) : '';
-            const leaveTime = row.leaveTime ? row.leaveTime.toDate().toLocaleString('zh-TW', { hour12: false }) : '';
-            const durationMinutes = row.entryTime && row.leaveTime ? Math.floor((row.leaveTime.seconds - row.entryTime.seconds) / 60) : '';
-            csvRows.push([`"${row.carPlate}"`, `"${row.huBei}"`, `"${getPurchasedSpot(row.huBei)}"`, `"${entryTime}"`, `"${leaveTime}"`, `"${durationMinutes}"`]);
+      exportToCsv() {
+        if (this.records.length === 0) {
+            alert('沒有記錄可匯出。');
+            return;
+        }
+
+        let csvContent = "\uFEFF"; // BOM for UTF-8
+        csvContent += "車牌號碼,戶別,入場時間,出場時間,停放時長\n";
+
+        this.records.forEach(record => {
+            const entry = new Date(record.entryTime);
+            const exit = record.exitTime ? new Date(record.exitTime) : null;
+            const entryTimeStr = `${entry.getHours().toString().padStart(2, '0')}:${entry.getMinutes().toString().padStart(2, '0')}`;
+            const exitTimeStr = exit ? `${exit.getHours().toString().padStart(2, '0')}:${exit.getMinutes().toString().padStart(2, '0')}` : '';
+            const duration = exit ? Math.round((exit - entry) / 60000) : '';
+
+            csvContent += `${record.licensePlate},${record.unit},${entryTimeStr},${exitTimeStr},${duration}\n`;
         });
-        const csvString = '\uFEFF' + csvRows.map(row => row.join(',')).join('\n');
-        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `parking_log_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-    }
-    
-    // --- 事件監聽 ---
-    huBeiInput.addEventListener('blur', () => {
-        if (huBeiInput.value.trim()) {
-            huBeiInput.value = findFullHuBei(huBeiInput.value);
-        }
-    });
+      },
+    };
 
-    searchInput.addEventListener('input', filterAndRenderViews);
+    // ##### THIS IS THE MISSING LINE TO START THE APP #####
+    document.addEventListener('DOMContentLoaded', () => App.init());
 
-    exportCsvBtn.addEventListener('click', () => {
-        const date = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-        downloadCsv(todayRecords, `parking_log_${date}.csv`);
-    });
-
-    addRecordBtn.addEventListener('click', addRecord);
-    window.addEventListener('DOMContentLoaded', initializeAppAndAuth);
   </script>
 </body>
 </html>
