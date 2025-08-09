@@ -59,7 +59,7 @@
         </div>
 
         <div class="card p-6">
-          <h2 class="text-xl font-bold mb-4">在場車輛</h2>
+          <h2 class="text-xl font-bold mb-4">在場車輛 (即時)</h2>
           <div id="vehicles-present-container" class="space-y-3">
             <p class="text-gray-500">目前沒有在場車輛。</p>
             </div>
@@ -69,16 +69,17 @@
       <div class="lg:col-span-2 flex flex-col gap-6">
         <div class="card p-6">
             <h2 class="text-xl font-bold mb-4">數據分析</h2>
-            <p class="text-sm text-gray-600 mb-4">今日各時段入場車流量分析</p>
+            <p class="text-sm text-gray-600 mb-4">所選日期各時段入場車流量分析</p>
             <div class="h-64">
               <canvas id="entry-time-chart"></canvas>
             </div>
         </div>
         <div class="card p-6">
           <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
-              <h2 class="text-xl font-bold">今日停車總記錄</h2>
-              <div class="w-full sm:w-auto">
-                  <input type="text" id="search-input" class="w-full sm:w-64 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="搜尋車牌或戶別...">
+              <h2 class="text-xl font-bold">停車總記錄 (<span id="selected-date-display" class="text-blue-600"></span>)</h2>
+              <div class="flex items-center gap-2">
+                  <input type="date" id="date-picker-input" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                  <input type="text" id="search-input" class="w-full sm:w-56 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="搜尋車牌或戶別...">
               </div>
           </div>
           <div class="overflow-x-auto">
@@ -98,7 +99,7 @@
           </div>
           <div class="mt-6 text-right">
               <button id="export-csv-btn" class="btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
-                  匯出今日記錄 (CSV)
+                  匯出所選日期記錄 (CSV)
               </button>
           </div>
         </div>
@@ -110,7 +111,7 @@
   <script type="module">
     // Firebase Imports
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // Firebase Config
     const firebaseConfig = {
@@ -128,6 +129,7 @@
       records: [],
       vehicles: [],
       entryTimeChart: null,
+      selectedDate: '', // NEW: To store the selected date
 
       init() {
         const app = initializeApp(firebaseConfig);
@@ -135,7 +137,8 @@
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.loadAndDisplayRecords();
+        this.initDatePicker(); // NEW: Initialize the date picker
+        this.fetchAndDisplayRecords(this.selectedDate); // MODIFIED: Fetch initial data
         this.listenForPresentVehicles();
         this.initChart();
       },
@@ -150,6 +153,8 @@
           searchInput: document.getElementById('search-input'),
           exportCsvBtn: document.getElementById('export-csv-btn'),
           chartCanvas: document.getElementById('entry-time-chart'),
+          datePickerInput: document.getElementById('date-picker-input'), // NEW
+          selectedDateDisplay: document.getElementById('selected-date-display'), // NEW
         };
       },
 
@@ -162,8 +167,15 @@
         });
         this.elements.searchInput.addEventListener('input', (e) => this.filterRecords(e.target.value));
         this.elements.exportCsvBtn.addEventListener('click', () => this.exportToCsv());
+        this.elements.datePickerInput.addEventListener('change', (e) => this.fetchAndDisplayRecords(e.target.value)); // NEW
       },
       
+      initDatePicker() {
+          this.selectedDate = new Date().toISOString().split('T')[0];
+          this.elements.datePickerInput.value = this.selectedDate;
+          this.elements.selectedDateDisplay.textContent = this.selectedDate;
+      },
+
       initChart() {
         const ctx = this.elements.chartCanvas.getContext('2d');
         const labels = Array.from({ length: 24 }, (_, i) => `${i}時`);
@@ -199,32 +211,34 @@
         });
       },
 
-      async loadAndDisplayRecords() {
-        const todayStr = new Date().toISOString().split('T')[0];
+      // MODIFIED: This function now fetches data for a specific date on demand
+      async fetchAndDisplayRecords(dateStr) {
+        if (!dateStr) return;
+        this.selectedDate = dateStr;
+        this.elements.datePickerInput.value = this.selectedDate;
+        this.elements.selectedDateDisplay.textContent = this.selectedDate;
+        
         const recordsRef = collection(this.db, 'parking_records');
-        const q = query(recordsRef, where("entryDate", "==", todayStr));
+        const q = query(recordsRef, where("entryDate", "==", dateStr));
 
-        onSnapshot(q, (snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-                const data = { id: change.doc.id, ...change.doc.data() };
-                if (change.type === "added") {
-                    this.records.unshift(data);
-                }
-                if (change.type === "modified") {
-                    const index = this.records.findIndex(rec => rec.id === data.id);
-                    if (index > -1) this.records[index] = data;
-                }
-                if (change.type === "removed") {
-                    this.records = this.records.filter(rec => rec.id !== data.id);
-                }
+        try {
+            const querySnapshot = await getDocs(q);
+            this.records = []; // Clear previous records
+            querySnapshot.forEach(doc => {
+                this.records.push({ id: doc.id, ...doc.data() });
             });
-            this.records.sort((a,b) => b.entryTime.localeCompare(a.entryTime));
+            this.records.sort((a,b) => b.entryTime.localeCompare(a.entryTime)); // Sort by entry time
             this.displayRecords();
             this.updateChart();
-        });
+        } catch(error) {
+            console.error("Error fetching records: ", error);
+            alert("讀取停車記錄失敗。");
+        }
       },
 
+      // This function now only listens for currently present vehicles, which is date-independent
       listenForPresentVehicles() {
+        const { onSnapshot } =_IMPORTED_FIREBASE_MODULE_["https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"];
         const recordsRef = collection(this.db, 'parking_records');
         const q = query(recordsRef, where("status", "==", "present"));
         onSnapshot(q, (snapshot) => {
@@ -239,7 +253,7 @@
       displayRecords(recordsToDisplay = this.records) {
         this.elements.recordsTableBody.innerHTML = '';
         if (recordsToDisplay.length === 0) {
-          this.elements.recordsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-gray-500 py-4">今日尚無停車記錄。</td></tr>`;
+          this.elements.recordsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-gray-500 py-4">該日期無停車記錄。</td></tr>`;
           return;
         }
 
@@ -247,14 +261,16 @@
           const entry = new Date(record.entryTime);
           const exit = record.exitTime ? new Date(record.exitTime) : null;
           const duration = exit ? Math.round((exit - entry) / 60000) : '-';
-          const exitTimeStr = exit ? `${exit.getHours().toString().padStart(2, '0')}:${exit.getMinutes().toString().padStart(2, '0')}` : '-';
+          
+          // Format time nicely
+          const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '-';
 
           const row = `
             <tr>
               <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${record.licensePlate}</td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${record.unit}</td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${entry.getHours().toString().padStart(2, '0')}:${entry.getMinutes().toString().padStart(2, '0')}</td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${exitTimeStr}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatTime(entry)}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatTime(exit)}</td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${duration}</td>
             </tr>`;
           this.elements.recordsTableBody.insertAdjacentHTML('beforeend', row);
@@ -323,14 +339,18 @@
           entryTime: now.toISOString(),
           entryDate: now.toISOString().split('T')[0],
           exitTime: null,
-          status: 'present' // 'present' or 'departed'
+          status: 'present'
         };
 
-        const docId = `${newRecord.entryDate}_${plate}`;
+        const docId = `${newRecord.entryDate}_${plate.replace(/[^a-zA-Z0-9]/g, '')}`;
         
         try {
           await setDoc(doc(this.db, 'parking_records', docId), newRecord);
           this.elements.newRecordForm.reset();
+          // If viewing today, the record will show up automatically. If viewing another day, it won't, which is correct.
+          if (this.selectedDate === newRecord.entryDate) {
+              this.fetchAndDisplayRecords(this.selectedDate); // Re-fetch to show new record immediately
+          }
         } catch (error) {
           console.error("新增記錄失敗: ", error);
           alert('新增記錄失敗，請檢查網路連線或稍後再試。');
@@ -343,12 +363,13 @@
         const recordRef = doc(this.db, 'parking_records', docId);
         
         try {
-          // Use updateDoc instead of setDoc with merge to avoid overwriting
           const { updateDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
           await updateDoc(recordRef, {
             exitTime: now.toISOString(),
             status: 'departed'
           });
+          // After checking out, re-fetch the records for the currently viewed date
+          this.fetchAndDisplayRecords(this.selectedDate);
         } catch (error) {
             console.error("更新出場時間失敗: ", error);
             alert('更新出場時間失敗，請檢查網路連線或稍後再試。');
@@ -361,24 +382,23 @@
             return;
         }
 
-        let csvContent = "\uFEFF"; // BOM for UTF-8
+        let csvContent = "\uFEFF";
         csvContent += "車牌號碼,戶別,入場時間,出場時間,停放時長\n";
 
         this.records.forEach(record => {
             const entry = new Date(record.entryTime);
             const exit = record.exitTime ? new Date(record.exitTime) : null;
-            const entryTimeStr = `${entry.getHours().toString().padStart(2, '0')}:${entry.getMinutes().toString().padStart(2, '0')}`;
-            const exitTimeStr = exit ? `${exit.getHours().toString().padStart(2, '0')}:${exit.getMinutes().toString().padStart(2, '0')}` : '';
+            const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '';
             const duration = exit ? Math.round((exit - entry) / 60000) : '';
 
-            csvContent += `${record.licensePlate},${record.unit},${entryTimeStr},${exitTimeStr},${duration}\n`;
+            csvContent += `${record.licensePlate},${record.unit},${formatTime(entry)},${formatTime(exit)},${duration}\n`;
         });
         
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        link.setAttribute("download", `parking_log_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute("download", `parking_log_${this.selectedDate}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -386,9 +406,7 @@
       },
     };
 
-    // ##### THIS IS THE MISSING LINE TO START THE APP #####
     document.addEventListener('DOMContentLoaded', () => App.init());
-
   </script>
 </body>
 </html>
