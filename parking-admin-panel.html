@@ -52,6 +52,10 @@
               <label for="unit-input" class="block text-sm font-medium text-gray-700">戶別:</label>
               <input type="text" id="unit-input" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="例如: 5C, 施工, 或貴賓">
             </div>
+            <div>
+              <label for="spot-number-input" class="block text-sm font-medium text-gray-700">購買車位編號:</label>
+              <input type="text" id="spot-number-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="例如: B2-55 (若無則留空)">
+            </div>
             <button type="submit" class="w-full btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
               新增停車
             </button>
@@ -62,7 +66,7 @@
           <h2 class="text-xl font-bold mb-4">在場車輛 (即時)</h2>
           <div id="vehicles-present-container" class="space-y-3">
             <p class="text-gray-500">目前沒有在場車輛。</p>
-            </div>
+          </div>
         </div>
       </div>
 
@@ -88,13 +92,14 @@
                 <tr>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車牌號碼</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">戶別</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車位編號</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入場時間</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">出場時間</th>
                   <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">停放時長 (分)</th>
                 </tr>
               </thead>
               <tbody id="records-table-body" class="bg-white divide-y divide-gray-200">
-                </tbody>
+              </tbody>
             </table>
           </div>
           <div class="mt-6 text-right">
@@ -109,11 +114,9 @@
   </div>
 
   <script type="module">
-    // Firebase Imports
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDocs, collection, query, where, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
       authDomain: "jy-2025.firebaseapp.com",
@@ -129,7 +132,7 @@
       records: [],
       vehicles: [],
       entryTimeChart: null,
-      selectedDate: '', // NEW: To store the selected date
+      selectedDate: '',
 
       init() {
         const app = initializeApp(firebaseConfig);
@@ -137,8 +140,8 @@
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.initDatePicker(); // NEW: Initialize the date picker
-        this.fetchAndDisplayRecords(this.selectedDate); // MODIFIED: Fetch initial data
+        this.initDatePicker();
+        this.fetchAndDisplayRecords(this.selectedDate);
         this.listenForPresentVehicles();
         this.initChart();
       },
@@ -148,13 +151,14 @@
           newRecordForm: document.getElementById('new-record-form'),
           licensePlateInput: document.getElementById('license-plate-input'),
           unitInput: document.getElementById('unit-input'),
+          spotNumberInput: document.getElementById('spot-number-input'), // MODIFIED
           vehiclesPresentContainer: document.getElementById('vehicles-present-container'),
           recordsTableBody: document.getElementById('records-table-body'),
           searchInput: document.getElementById('search-input'),
           exportCsvBtn: document.getElementById('export-csv-btn'),
           chartCanvas: document.getElementById('entry-time-chart'),
-          datePickerInput: document.getElementById('date-picker-input'), // NEW
-          selectedDateDisplay: document.getElementById('selected-date-display'), // NEW
+          datePickerInput: document.getElementById('date-picker-input'),
+          selectedDateDisplay: document.getElementById('selected-date-display'),
         };
       },
 
@@ -167,7 +171,7 @@
         });
         this.elements.searchInput.addEventListener('input', (e) => this.filterRecords(e.target.value));
         this.elements.exportCsvBtn.addEventListener('click', () => this.exportToCsv());
-        this.elements.datePickerInput.addEventListener('change', (e) => this.fetchAndDisplayRecords(e.target.value)); // NEW
+        this.elements.datePickerInput.addEventListener('change', (e) => this.fetchAndDisplayRecords(e.target.value));
       },
       
       initDatePicker() {
@@ -181,9 +185,7 @@
         const labels = Array.from({ length: 24 }, (_, i) => `${i}時`);
         this.entryTimeChart = new Chart(ctx, {
             type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
+            data: { labels: labels, datasets: [{
                     label: '入場車輛數',
                     data: new Array(24).fill(0),
                     backgroundColor: 'rgba(59, 130, 246, 0.5)',
@@ -191,27 +193,13 @@
                     borderWidth: 1
                 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
+            options: { responsive: true, maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+                plugins: { legend: { display: false } }
             }
         });
       },
 
-      // MODIFIED: This function now fetches data for a specific date on demand
       async fetchAndDisplayRecords(dateStr) {
         if (!dateStr) return;
         this.selectedDate = dateStr;
@@ -223,11 +211,11 @@
 
         try {
             const querySnapshot = await getDocs(q);
-            this.records = []; // Clear previous records
+            this.records = [];
             querySnapshot.forEach(doc => {
                 this.records.push({ id: doc.id, ...doc.data() });
             });
-            this.records.sort((a,b) => b.entryTime.localeCompare(a.entryTime)); // Sort by entry time
+            this.records.sort((a,b) => b.entryTime.localeCompare(a.entryTime));
             this.displayRecords();
             this.updateChart();
         } catch(error) {
@@ -236,9 +224,7 @@
         }
       },
 
-      // This function now only listens for currently present vehicles, which is date-independent
       listenForPresentVehicles() {
-        const { onSnapshot } =_IMPORTED_FIREBASE_MODULE_["https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"];
         const recordsRef = collection(this.db, 'parking_records');
         const q = query(recordsRef, where("status", "==", "present"));
         onSnapshot(q, (snapshot) => {
@@ -253,7 +239,7 @@
       displayRecords(recordsToDisplay = this.records) {
         this.elements.recordsTableBody.innerHTML = '';
         if (recordsToDisplay.length === 0) {
-          this.elements.recordsTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-gray-500 py-4">該日期無停車記錄。</td></tr>`;
+          this.elements.recordsTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-4">該日期無停車記錄。</td></tr>`;
           return;
         }
 
@@ -261,14 +247,14 @@
           const entry = new Date(record.entryTime);
           const exit = record.exitTime ? new Date(record.exitTime) : null;
           const duration = exit ? Math.round((exit - entry) / 60000) : '-';
-          
-          // Format time nicely
           const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '-';
-
+          const spotDisplayText = record.spotNumber ? record.spotNumber : '無'; // MODIFIED
+          
           const row = `
             <tr>
               <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${record.licensePlate}</td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${record.unit}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${spotDisplayText}</td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatTime(entry)}</td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${formatTime(exit)}</td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${duration}</td>
@@ -326,6 +312,7 @@
         e.preventDefault();
         const plate = this.elements.licensePlateInput.value.trim().toUpperCase();
         const unit = this.elements.unitInput.value.trim();
+        const spotNumber = this.elements.spotNumberInput.value.trim(); // MODIFIED
 
         if (!plate || !unit) {
           alert('車牌和戶別為必填項。');
@@ -336,6 +323,7 @@
         const newRecord = {
           licensePlate: plate,
           unit: unit,
+          spotNumber: spotNumber, // MODIFIED
           entryTime: now.toISOString(),
           entryDate: now.toISOString().split('T')[0],
           exitTime: null,
@@ -347,9 +335,8 @@
         try {
           await setDoc(doc(this.db, 'parking_records', docId), newRecord);
           this.elements.newRecordForm.reset();
-          // If viewing today, the record will show up automatically. If viewing another day, it won't, which is correct.
           if (this.selectedDate === newRecord.entryDate) {
-              this.fetchAndDisplayRecords(this.selectedDate); // Re-fetch to show new record immediately
+              this.fetchAndDisplayRecords(this.selectedDate);
           }
         } catch (error) {
           console.error("新增記錄失敗: ", error);
@@ -363,12 +350,10 @@
         const recordRef = doc(this.db, 'parking_records', docId);
         
         try {
-          const { updateDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
           await updateDoc(recordRef, {
             exitTime: now.toISOString(),
             status: 'departed'
           });
-          // After checking out, re-fetch the records for the currently viewed date
           this.fetchAndDisplayRecords(this.selectedDate);
         } catch (error) {
             console.error("更新出場時間失敗: ", error);
@@ -383,15 +368,16 @@
         }
 
         let csvContent = "\uFEFF";
-        csvContent += "車牌號碼,戶別,入場時間,出場時間,停放時長\n";
+        csvContent += "車牌號碼,戶別,車位編號,入場時間,出場時間,停放時長\n"; // MODIFIED
 
         this.records.forEach(record => {
             const entry = new Date(record.entryTime);
             const exit = record.exitTime ? new Date(record.exitTime) : null;
             const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '';
             const duration = exit ? Math.round((exit - entry) / 60000) : '';
+            const spotCsvText = record.spotNumber ? record.spotNumber : '無'; // MODIFIED
 
-            csvContent += `${record.licensePlate},${record.unit},${formatTime(entry)},${formatTime(exit)},${duration}\n`;
+            csvContent += `${record.licensePlate},${record.unit},${spotCsvText},${formatTime(entry)},${formatTime(exit)},${duration}\n`; // MODIFIED
         });
         
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
