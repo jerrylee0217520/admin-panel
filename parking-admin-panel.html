@@ -361,25 +361,23 @@
         const durationHours = (now - entryTime) / 3600000;
         const isLongParking = durationHours >= 8;
 
-        recordEl.innerHTML = `recordEl.innerHTML = `
-          <div class="flex-grow">
-            <p class="font-bold text-base text-gray-800">${record.carPlate}</p>
-            <p class="text-sm text-gray-600">${record.huBei}</p>
-            <div class="mt-1">
-              <span class="badge ${getPurchasedSpot(record.huBei) === '無' ? 'gray' : ''}">
-                購買車位：${getPurchasedSpot(record.huBei)}
-              </span>
-            </div>
-            ${isLongParking ? `<p class="text-xs text-red-500 font-bold mt-1">⚠️ 超時停車 (${Math.floor(durationHours)}小時)</p>` : ''}
-          </div>
-          <button data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
-            出場
-          </button>
-        `;`; data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
-            出場
-          </button>
-        `;
-        parkingList.appendChild(recordEl);
+        
+recordEl.innerHTML = `
+  <div class="flex-grow">
+    <p class="font-bold text-base text-gray-800">${record.carPlate}</p>
+    <p class="text-sm text-gray-600">${record.huBei}</p>
+    <div class="mt-1">
+      <span class="badge ${getPurchasedSpot(record.huBei) === '無' ? 'gray' : ''}">
+        購買車位：${getPurchasedSpot(record.huBei)}
+      </span>
+    </div>
+    ${isLongParking ? `<p class="text-xs text-red-500 font-bold mt-1">⚠️ 超時停車 (${Math.floor(durationHours)}小時)</p>` : ''}
+  </div>
+  <button data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
+    出場
+  </button>
+`;
+parkingList.appendChild(recordEl);
       });
       document.querySelectorAll('.leave-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
