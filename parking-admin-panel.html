@@ -86,6 +86,15 @@
       max-width: 90%;
       width: 400px;
     }
+  
+    .log-table thead th { position: sticky; top: 0; z-index: 1; }
+    .log-table tbody tr:nth-child(odd) { background-color: #fafbfc; }
+    .badge {
+      display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px;
+      background:#eef6ff; color:#1d4ed8; border:1px solid #dbeafe;
+    }
+    .badge.gray { background:#f5f5f5; color:#4b5563; border-color:#e5e7eb; }
+    
   </style>
 </head>
 <body class="antialiased p-4">
@@ -237,6 +246,20 @@
         '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
     ];
     
+    function normalizeHuBeiKey(h) {
+        if (!h) return '';
+        const str = String(h).trim();
+        // unify common aliases
+        if (str.toUpperCase() === 'VIP') return '貴賓';
+        return findFullHuBei(str);
+    }
+    function getPurchasedSpot(huBei) {
+        const key = normalizeHuBeiKey(huBei);
+        const spot = residentParkingMap[key];
+        return spot ? spot : '無';
+    }
+    
+    
     // --- 核心功能 ---
 
     function showError(message) {
@@ -338,13 +361,21 @@
         const durationHours = (now - entryTime) / 3600000;
         const isLongParking = durationHours >= 8;
 
-        recordEl.innerHTML = `
+        recordEl.innerHTML = `recordEl.innerHTML = `
           <div class="flex-grow">
             <p class="font-bold text-base text-gray-800">${record.carPlate}</p>
             <p class="text-sm text-gray-600">${record.huBei}</p>
+            <div class="mt-1">
+              <span class="badge ${getPurchasedSpot(record.huBei) === '無' ? 'gray' : ''}">
+                購買車位：${getPurchasedSpot(record.huBei)}
+              </span>
+            </div>
             ${isLongParking ? `<p class="text-xs text-red-500 font-bold mt-1">⚠️ 超時停車 (${Math.floor(durationHours)}小時)</p>` : ''}
           </div>
           <button data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
+            出場
+          </button>
+        `;`; data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
             出場
           </button>
         `;
@@ -385,6 +416,7 @@
                         <th>狀態</th>
                         <th>車牌</th>
                         <th>戶別</th>
+                        <th>購買車位</th>
                         <th>入場時間</th>
                         <th>出場時間</th>
                         <th>停放時長</th>
@@ -394,6 +426,7 @@
                 <tbody>
         `;
         const tableFooter = `</tbody></table>`;
+        
         const tableRows = records.map(record => {
             const isLeft = !!record.leaveTime;
             const entryTimeStr = record.entryTime ? record.entryTime.toDate().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
@@ -402,12 +435,11 @@
 
             const huBeiUpper = record.huBei ? record.huBei.toUpperCase() : '';
             const isConstruction = huBeiUpper.includes('施工');
-            // FIX: Check for both '貴賓' and 'VIP' to handle old and new data
             const isVip = huBeiUpper === '貴賓' || huBeiUpper === 'VIP';
-            const isOwnerWithSpot = !!residentParkingMap[record.huBei];
+            const isOwnerWithSpot = !!residentParkingMap[normalizeHuBeiKey(record.huBei)];
+            const purchasedSpot = getPurchasedSpot(record.huBei);
             
             let statusDotClass, huBeiStatusText;
-            
             if (isConstruction) {
                 statusDotClass = 'parked-construction';
                 huBeiStatusText = '施工';
@@ -423,6 +455,20 @@
             }
 
             return `
+                <tr class="${isLeft ? 'is-left' : ''}">
+                    <td><span class="status-dot ${statusDotClass}"></span>${isLeft ? '已離場' : '在場'}</td>
+                    <td>${record.carPlate}</td>
+                    <td><span class="font-bold">${record.huBei}</span><br><span class="text-xs text-gray-500">${huBeiStatusText}</span></td>
+                    <td>${purchasedSpot}</td>
+                    <td>${entryTimeStr}</td>
+                    <td>${leaveTimeStr}</td>
+                    <td>${duration}</td>
+                    <td><button data-id="${record.id}" class="delete-btn text-red-500 hover:text-red-700 transition duration-150 text-sm font-bold">✕</button></td>
+                </tr>
+            `;
+        }).join('');
+    
+        return `
                 <tr class="${isLeft ? 'is-left' : ''}">
                     <td><span class="status-dot ${statusDotClass}"></span>${isLeft ? '已離場' : '在場'}</td>
                     <td>${record.carPlate}</td>
@@ -534,12 +580,12 @@
     }
     
     function downloadCsv(data, filename) {
-        const csvRows = [["車牌號碼", "戶別", "入場時間", "出場時間", "停放時長(分鐘)"]];
+        const csvRows = [["車牌號碼", "戶別", "購買車位", "入場時間", "出場時間", "停放時長(分鐘)"]];
         data.forEach(row => {
             const entryTime = row.entryTime ? row.entryTime.toDate().toLocaleString('zh-TW', { hour12: false }) : '';
             const leaveTime = row.leaveTime ? row.leaveTime.toDate().toLocaleString('zh-TW', { hour12: false }) : '';
             const durationMinutes = row.entryTime && row.leaveTime ? Math.floor((row.leaveTime.seconds - row.entryTime.seconds) / 60) : '';
-            csvRows.push([`"${row.carPlate}"`, `"${row.huBei}"`, `"${entryTime}"`, `"${leaveTime}"`, `"${durationMinutes}"`]);
+            csvRows.push([`"${row.carPlate}"`, `"${row.huBei}"`, `"${getPurchasedSpot(row.huBei)}"`, `"${entryTime}"`, `"${leaveTime}"`, `"${durationMinutes}"`]);
         });
         const csvString = '\uFEFF' + csvRows.map(row => row.join(',')).join('\n');
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
