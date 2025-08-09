@@ -65,7 +65,7 @@
         <div class="card p-6">
           <h2 class="text-xl font-bold mb-4">在場車輛 (即時)</h2>
           <div id="vehicles-present-container" class="space-y-3">
-            <p class="text-gray-500">目前沒有在場車輛。</p>
+            <p class="text-gray-500">正在讀取中...</p>
           </div>
         </div>
       </div>
@@ -200,12 +200,38 @@
         });
       },
 
+      // ##### NEW: Centralized Error Handling Function #####
+      handleFirestoreError(error, element, type = 'table') {
+        console.error("Firestore Error:", error);
+        let userMessage = "讀取資料時發生未知錯誤。";
+
+        switch (error.code) {
+            case 'failed-precondition':
+                userMessage = "讀取失敗：缺少資料庫索引。請按 F12 打開 Console，點擊錯誤訊息中的連結來自動建立。";
+                break;
+            case 'permission-denied':
+                userMessage = "讀取失敗：權限不足。請檢查 Firebase 安全規則設定。";
+                break;
+            case 'unavailable':
+                userMessage = "讀取失敗：無法連線至資料庫，請檢查您的網路連線。";
+                break;
+        }
+
+        if (type === 'table') {
+            const colspan = this.elements.recordsTableBody.parentElement.querySelector('thead tr').childElementCount;
+            element.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-red-500 py-4">${userMessage}</td></tr>`;
+        } else { // 'div'
+            element.innerHTML = `<div class="p-3 bg-red-100 text-red-700 rounded-lg">${userMessage}</div>`;
+        }
+      },
+
       async fetchAndDisplayRecords(dateStr) {
         if (!dateStr) return;
         this.selectedDate = dateStr;
         this.elements.datePickerInput.value = this.selectedDate;
         this.elements.selectedDateDisplay.textContent = this.selectedDate;
-        
+        this.elements.recordsTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-4">正在讀取中...</td></tr>`;
+
         const recordsRef = collection(this.db, 'parking_records');
         const q = query(recordsRef, where("entryDate", "==", dateStr));
 
@@ -219,8 +245,7 @@
             this.displayRecords();
             this.updateChart();
         } catch(error) {
-            console.error("讀取停車總記錄失敗: ", error);
-            alert("讀取停車總記錄失敗，請檢查 Console 的錯誤訊息。");
+            this.handleFirestoreError(error, this.elements.recordsTableBody, 'table');
         }
       },
 
@@ -228,7 +253,6 @@
         const recordsRef = collection(this.db, 'parking_records');
         const q = query(recordsRef, where("status", "==", "present"));
         
-        // ##### MODIFIED: Added error handling to onSnapshot #####
         onSnapshot(q, 
           (snapshot) => {
             this.vehicles = [];
@@ -238,9 +262,7 @@
             this.displayPresentVehicles();
           }, 
           (error) => {
-            console.error("讀取在場車輛列表失敗: ", error);
-            alert("讀取在場車輛列表失敗，請檢查 Console 的錯誤訊息(可能需要建立索引)。");
-            this.elements.vehiclesPresentContainer.innerHTML = '<p class="text-red-500">在場車輛讀取失敗！</p>';
+            this.handleFirestoreError(error, this.elements.vehiclesPresentContainer, 'div');
           }
         );
       },
