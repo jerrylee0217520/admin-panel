@@ -105,7 +105,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getFirestore, doc, getDoc, addDoc, getDocs, collection, query, where, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, getDocs, collection, query, where, onSnapshot, doc, getDoc, addDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithRedirect, signOut, getRedirectResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
@@ -117,8 +117,6 @@
       appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
     
-    // 移除硬編碼的 ADMIN_UIDS 陣列，改為從 Firestore 讀取。
-    
     const allHuBeiList = [
         '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓', '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓', '6A-6樓', '6B-6樓', '6C-6樓', '6D-6樓', '6E-6樓', '6F-6樓', '5A-5樓', '5B-5樓', '5C-5樓', '5D-5樓', '5E-5樓', '5F-5樓', '4A-4樓', '4B-4樓', '4CD-4樓', '4EF-4樓', '3A-3樓', '3B-3樓', '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓', '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
     ];
@@ -129,7 +127,7 @@
       records: [], vehicles: [], entryTimeChart: null, selectedDate: '',
       retrievedSpotNumber: '',
       isAuthReady: false,
-      adminUids: [], // 用於儲存從 Firestore 讀取到的管理員 UID
+      adminUids: [], 
 
       init() {
         const app = initializeApp(firebaseConfig);
@@ -175,34 +173,43 @@
       },
       
       initAuthWatcher() {
-        onAuthStateChanged(this.auth, (user) => {
+        onAuthStateChanged(this.auth, async (user) => {
           this.user = user;
-          if (!this.isAuthReady) {
-              this.isAuthReady = true;
-              this.fetchAdminUids().then(() => this.updateAuthUI());
-          } else {
-              this.updateAuthUI();
-          }
-
-          // **新增**：在使用者登入/登出時，將 UID 印在主控台
+          
           if (user) {
               console.log("登入成功，使用者 UID:", user.uid);
+              this.elements.userStatus.textContent = `正在驗證權限...`;
+              
+              try {
+                  const isAdmin = await this.checkAdminStatus(user.uid);
+                  this.updateAuthUI(isAdmin);
+              } catch (error) {
+                  console.error("驗證權限失敗：", error);
+                  this.elements.userStatus.textContent = "驗證權限失敗，請檢查網路連線或安全規則。";
+                  this.elements.mainContent.classList.add('hidden');
+              }
           } else {
               console.log("已登出，使用者 UID: 無");
+              this.elements.userStatus.textContent = '請使用管理員帳號登入以繼續。';
+              this.elements.authButton.textContent = '登入 Google';
+              this.elements.mainContent.classList.add('hidden');
           }
         });
       },
 
-      async fetchAdminUids() {
-        try {
-            const adminsRef = collection(this.db, 'admins');
-            const snapshot = await getDocs(adminsRef);
-            this.adminUids = snapshot.docs.map(doc => doc.id);
-            console.log("已從 Firestore 載入管理員 UID：", this.adminUids);
-        } catch (error) {
-            console.error("載入管理員清單失敗：", error);
-            alert("載入管理員清單失敗，部分功能可能無法正常運作。");
-        }
+      async checkAdminStatus(uid) {
+          const adminsRef = collection(this.db, 'admins');
+          try {
+              const adminDoc = await getDoc(doc(adminsRef, uid));
+              return adminDoc.exists();
+          } catch (error) {
+              // 在權限不足的情況下，Firestore 會拋出錯誤，這也代表不是管理員
+              if (error.code === 'permission-denied') {
+                  return false;
+              }
+              // 對其他錯誤，拋出以讓上層處理
+              throw error;
+          }
       },
 
       async handleRedirectResult() {
@@ -230,14 +237,8 @@
         }
       },
       
-      updateAuthUI() {
-        if (!this.isAuthReady || (this.user && this.adminUids.length === 0)) {
-            // 如果管理員清單還沒載入，且使用者已登入，就先不更新 UI
-            return;
-        }
-
+      updateAuthUI(isAdmin) {
         if (this.user) {
-            const isAdmin = this.adminUids.includes(this.user.uid);
             if (isAdmin) {
                 this.elements.userStatus.textContent = `管理員已登入: ${this.user.displayName || this.user.email}`;
                 this.elements.authButton.textContent = '登出';
