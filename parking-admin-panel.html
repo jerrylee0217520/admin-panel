@@ -106,7 +106,8 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getFirestore, doc, getDoc, addDoc, getDocs, collection, query, where, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithRedirect, signOut, getRedirectResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    // ##### MODIFIED: Import signInWithPopup #####
+    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
@@ -128,7 +129,6 @@
       elements: {},
       records: [], vehicles: [], entryTimeChart: null, selectedDate: '',
       retrievedSpotNumber: '',
-      isAuthReady: false,
 
       init() {
         const app = initializeApp(firebaseConfig);
@@ -137,7 +137,6 @@
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.handleRedirectResult();
         this.initAuthWatcher();
         this.initChart();
       },
@@ -176,44 +175,30 @@
       initAuthWatcher() {
         onAuthStateChanged(this.auth, (user) => {
           this.user = user;
-          if (!this.isAuthReady) {
-              this.isAuthReady = true;
-          }
           this.updateAuthUI();
         });
       },
 
-      async handleRedirectResult() {
-        this.elements.userStatus.textContent = "正在驗證登入狀態...";
-        try {
-            const result = await getRedirectResult(this.auth);
-            if (result) {
-                console.log("[DEBUG] Redirect result processed for user:", result.user.email);
-            }
-        } catch (error) {
-            console.error("[DEBUG] Error processing redirect result:", error);
-            this.elements.userStatus.textContent = "登入驗證失敗，請重試。";
-        }
-      },
-
+      // ##### MODIFIED: Changed to use signInWithPopup #####
       async handleAuth() {
         if (this.user) {
           await signOut(this.auth);
         } else {
           const provider = new GoogleAuthProvider();
-          // ##### CORE FIX: Force account selection every time #####
           provider.setCustomParameters({
             prompt: 'select_account'
           });
-          signInWithRedirect(this.auth, provider);
+          try {
+            await signInWithPopup(this.auth, provider);
+          } catch (error) {
+            console.error("登入失敗:", error);
+            // Avoid alert() which might be blocked, use a console log or a custom toast/message element
+            this.elements.userStatus.textContent = `登入失敗: ${error.message}`;
+          }
         }
       },
       
       updateAuthUI() {
-        if (!this.isAuthReady) {
-            return;
-        }
-
         if (this.user) {
             const isAdmin = ADMIN_UIDS.includes(this.user.uid);
             if (isAdmin) {
