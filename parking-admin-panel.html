@@ -40,7 +40,7 @@
         <button id="auth-button" class="btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">登入 Google</button>
       </div>
       <p id="user-status" class="mt-2 text-sm text-gray-500">正在初始化...</p>
-      </header>
+    </header>
 
     <main id="main-content" class="grid grid-cols-1 lg:grid-cols-3 gap-6 hidden">
       
@@ -54,11 +54,11 @@
             </div>
             <div>
               <label for="unit-input" class="block text-sm font-medium text-gray-700">戶別:</label>
-              <input type="text" id="unit-input" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="例如: 5C, 施工, 或貴賓">
+              <input type="text" id="unit-input" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="輸入完畢後將自動比對車位">
             </div>
             <div>
-              <label for="spot-number-input" class="block text-sm font-medium text-gray-700">購買車位編號:</label>
-              <input type="text" id="spot-number-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="例如: B2-55 (若無則留空)">
+                <label class="block text-sm font-medium text-gray-700">車位狀態:</label>
+                <p id="spot-status-display" class="mt-1 text-lg font-bold text-gray-800">-</p>
             </div>
             <button type="submit" class="w-full btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
               新增停車
@@ -119,8 +119,8 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDocs, collection, query, where, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"; // NEW
+    import { getFirestore, doc, getDoc, setDoc, getDocs, collection, query, where, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
@@ -131,56 +131,34 @@
       appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
     
-    const ADMIN_UIDS = ["KcaxVmcqI3RzxWdhCl2dhVGPxti1"]; // NEW
+    const ADMIN_UIDS = ["8dYFqXhM4gVQr9MTEI5z3P4Xn9p2", "KcaxVmcqI3RzxWdhCl2dhVGPxti1"];
 
     const App = {
-      db: null,
-      auth: null, // NEW
-      user: null, // NEW
+      db: null, auth: null, user: null,
       elements: {},
-      records: [],
-      vehicles: [],
-      entryTimeChart: null,
-      selectedDate: '',
-
-      // ---- Helpers to handle legacy data formats ----
-      toDateLike(v) {
-        // Accept Firestore Timestamp, ISO string, or Date
-        if (!v) return null;
-        try {
-          if (v.toDate) return v.toDate();
-          if (typeof v === 'string') return new Date(v);
-          if (v.seconds) return new Date(v.seconds * 1000);
-        } catch {}
-        const d = new Date(v);
-        return isNaN(d) ? null : d;
-      },
-      toDateString(v) {
-        const d = this.toDateLike(v);
-        return d ? d.toISOString().split('T')[0] : '';
-      },
-
+      records: [], vehicles: [], entryTimeChart: null, selectedDate: '',
+      retrievedSpotNumber: '', 
 
       init() {
         const app = initializeApp(firebaseConfig);
         this.db = getFirestore(app);
-        this.auth = getAuth(app); // NEW
+        this.auth = getAuth(app);
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.initAuthWatcher(); // NEW
+        this.initAuthWatcher();
         this.initChart();
       },
 
       cacheDOMElements() {
         this.elements = {
-          authButton: document.getElementById('auth-button'), // NEW
-          userStatus: document.getElementById('user-status'), // NEW
-          mainContent: document.getElementById('main-content'), // NEW
+          authButton: document.getElementById('auth-button'),
+          userStatus: document.getElementById('user-status'),
+          mainContent: document.getElementById('main-content'),
           newRecordForm: document.getElementById('new-record-form'),
           licensePlateInput: document.getElementById('license-plate-input'),
           unitInput: document.getElementById('unit-input'),
-          spotNumberInput: document.getElementById('spot-number-input'),
+          spotStatusDisplay: document.getElementById('spot-status-display'),
           vehiclesPresentContainer: document.getElementById('vehicles-present-container'),
           recordsTableBody: document.getElementById('records-table-body'),
           searchInput: document.getElementById('search-input'),
@@ -192,8 +170,9 @@
       },
 
       bindEvents() {
-        this.elements.authButton.addEventListener('click', () => this.handleAuth()); // NEW
+        this.elements.authButton.addEventListener('click', () => this.handleAuth());
         this.elements.newRecordForm.addEventListener('submit', (e) => this.addRecord(e));
+        this.elements.unitInput.addEventListener('change', (e) => this.lookupParkingSpot(e.target.value));
         this.elements.vehiclesPresentContainer.addEventListener('click', (e) => {
           if (e.target.tagName === 'BUTTON') {
             this.checkOut(e.target.dataset.id);
@@ -204,7 +183,6 @@
         this.elements.datePickerInput.addEventListener('change', (e) => this.fetchAndDisplayRecords(e.target.value));
       },
       
-      // ##### NEW Authentication Functions #####
       initAuthWatcher() {
         onAuthStateChanged(this.auth, (user) => {
           this.user = user;
@@ -229,30 +207,24 @@
       
       updateAuthUI() {
         if (this.user && ADMIN_UIDS.includes(this.user.uid)) {
-          // Admin is logged in
           this.elements.userStatus.textContent = `管理員已登入: ${this.user.displayName || this.user.email}`;
           this.elements.authButton.textContent = '登出';
           this.elements.mainContent.classList.remove('hidden');
-          // Start loading data only after successful login
-          if (!this.selectedDate) { // Load only on first successful login
+          if (!this.selectedDate) {
             this.initDatePicker();
             this.fetchAndDisplayRecords(this.selectedDate);
             this.listenForPresentVehicles();
           }
         } else if (this.user) {
-          // Non-admin user is logged in
            this.elements.userStatus.textContent = `登入身份: ${this.user.displayName || this.user.email} (非管理員，無權限)`;
            this.elements.authButton.textContent = '登出';
            this.elements.mainContent.classList.add('hidden');
-        }
-        else {
-          // User is logged out
+        } else {
           this.elements.userStatus.textContent = '請使用管理員帳號登入以繼續。';
           this.elements.authButton.textContent = '登入 Google';
           this.elements.mainContent.classList.add('hidden');
         }
       },
-      // ##### End of Authentication Functions #####
       
       initDatePicker() {
           this.selectedDate = new Date().toISOString().split('T')[0];
@@ -265,34 +237,44 @@
         const labels = Array.from({ length: 24 }, (_, i) => `${i}時`);
         this.entryTimeChart = new Chart(ctx, {
             type: 'bar',
-            data: { labels: labels, datasets: [{
-                    label: '入場車輛數',
-                    data: new Array(24).fill(0),
-                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                    borderColor: 'rgba(59, 130, 246, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: { responsive: true, maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
-                plugins: { legend: { display: false } }
-            }
+            data: { labels: labels, datasets: [{ label: '入場車輛數', data: new Array(24).fill(0), backgroundColor: 'rgba(59, 130, 246, 0.5)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }
         });
+      },
+
+      async lookupParkingSpot(unitId) {
+        const unit = unitId.trim().toUpperCase();
+        if (!unit) {
+            this.elements.spotStatusDisplay.textContent = '-';
+            this.retrievedSpotNumber = '';
+            return;
+        }
+        this.elements.spotStatusDisplay.textContent = '查詢中...';
+        const spotRef = doc(this.db, 'unit_parking_spots', unit);
+        try {
+            const spotSnap = await getDoc(spotRef);
+            if (spotSnap.exists()) {
+                const spotNumber = spotSnap.data().spotNumber || '資料有誤';
+                this.elements.spotStatusDisplay.textContent = spotNumber;
+                this.retrievedSpotNumber = spotNumber;
+            } else {
+                this.elements.spotStatusDisplay.textContent = '無';
+                this.retrievedSpotNumber = '';
+            }
+        } catch (error) {
+            console.error("查詢車位失敗:", error);
+            this.elements.spotStatusDisplay.textContent = '查詢失敗';
+            this.retrievedSpotNumber = '';
+        }
       },
 
       handleFirestoreError(error, element, type = 'table') {
         console.error("Firestore Error:", error);
         let userMessage = "讀取資料時發生未知錯誤。";
         switch (error.code) {
-            case 'failed-precondition':
-                userMessage = "讀取失敗：缺少資料庫索引。請按 F12 打開 Console，點擊錯誤訊息中的連結來自動建立。";
-                break;
-            case 'permission-denied':
-                userMessage = "讀取失敗：權限不足。請登入管理員帳號，或檢查 Firebase 安全規則設定。";
-                break;
-            case 'unavailable':
-                userMessage = "讀取失敗：無法連線至資料庫，請檢查您的網路連線。";
-                break;
+            case 'failed-precondition': userMessage = "讀取失敗：缺少資料庫索引。請按 F12 打開 Console，點擊錯誤訊息中的連結來自動建立。"; break;
+            case 'permission-denied': userMessage = "讀取失敗：權限不足。請登入管理員帳號，或檢查 Firebase 安全規則設定。"; break;
+            case 'unavailable': userMessage = "讀取失敗：無法連線至資料庫，請檢查您的網路連線。"; break;
         }
         if (type === 'table') {
             const colspan = 6;
@@ -311,13 +293,10 @@
 
         const recordsRef = collection(this.db, 'parking_records');
         const q = query(recordsRef, where("entryDate", "==", dateStr));
-
         try {
             const querySnapshot = await getDocs(q);
             this.records = [];
-            querySnapshot.forEach(doc => {
-                this.records.push({ id: doc.id, ...doc.data() });
-            });
+            querySnapshot.forEach(doc => { this.records.push({ id: doc.id, ...doc.data() }); });
             this.records.sort((a,b) => b.entryTime.localeCompare(a.entryTime));
             this.displayRecords();
             this.updateChart();
@@ -329,33 +308,12 @@
       listenForPresentVehicles() {
         const recordsRef = collection(this.db, 'parking_records');
         const q = query(recordsRef, where("status", "==", "present"));
-        onSnapshot(q, 
-          (snapshot) => {
-            // reset before repopulating
+        onSnapshot(q, (snapshot) => {
             this.vehicles = [];
-            this.vehicles = [];
-            snapshot.forEach(doc => {
-                this.vehicles.push({ id: doc.id, ...doc.data() });
-            });
+            snapshot.forEach(doc => { this.vehicles.push({ id: doc.id, ...doc.data() }); });
             this.displayPresentVehicles();
-          }, 
-          (error) => {
+          }, (error) => {
             this.handleFirestoreError(error, this.elements.vehiclesPresentContainer, 'div');
-          }
-        );
-
-        const q2 = query(recordsRef, where("exitTime", "==", null));
-        onSnapshot(q2,
-          (snapshot) => {
-            // merge vehicles that might not have status field (legacy)
-            snapshot.forEach(doc => {
-              const item = { id: doc.id, ...doc.data() };
-              if (!this.vehicles.find(v => v.id === item.id)) this.vehicles.push(item);
-            });
-            this.displayPresentVehicles();
-          },
-          (error) => {
-            // ignore secondary errors silently
           }
         );
       },
@@ -367,8 +325,8 @@
           return;
         }
         recordsToDisplay.forEach(record => {
-          const entry = this.toDateLike(record.entryTime);
-          const exit = record.exitTime ? this.toDateLike(record.exitTime) : null;
+          const entry = new Date(record.entryTime);
+          const exit = record.exitTime ? new Date(record.exitTime) : null;
           const duration = exit ? Math.round((exit - entry) / 60000) : '-';
           const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '-';
           const spotDisplayText = record.spotNumber ? record.spotNumber : '無';
@@ -392,7 +350,7 @@
               return;
           }
           this.vehicles.forEach(v => {
-              const entry = this.toDateLike(v.entryTime);
+              const entry = new Date(v.entryTime);
               const timeStr = `${entry.getHours().toString().padStart(2, '0')}:${entry.getMinutes().toString().padStart(2, '0')}`;
               const vehicleHTML = `
                 <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
@@ -410,7 +368,7 @@
       updateChart() {
         const hourlyCounts = new Array(24).fill(0);
         this.records.forEach(record => {
-            const dt = this.toDateLike(record.entryTime); if (dt) { const entryHour = dt.getHours(); hourlyCounts[entryHour]++; }
+            const entryHour = new Date(record.entryTime).getHours();
             hourlyCounts[entryHour]++;
         });
         this.entryTimeChart.data.datasets[0].data = hourlyCounts;
@@ -433,12 +391,14 @@
       async addRecord(e) {
         e.preventDefault();
         const plate = this.elements.licensePlateInput.value.trim().toUpperCase();
-        const unit = this.elements.unitInput.value.trim();
-        const spotNumber = this.elements.spotNumberInput.value.trim();
+        const unit = this.elements.unitInput.value.trim().toUpperCase();
+        const spotNumber = this.retrievedSpotNumber;
+
         if (!plate || !unit) {
           alert('車牌和戶別為必填項。');
           return;
         }
+
         const now = new Date();
         const newRecord = {
           licensePlate: plate, unit: unit, spotNumber: spotNumber,
@@ -447,9 +407,12 @@
           exitTime: null, status: 'present'
         };
         const docId = `${newRecord.entryDate}_${plate.replace(/[^a-zA-Z0-9]/g, '')}`;
+        
         try {
           await setDoc(doc(this.db, 'parking_records', docId), newRecord);
           this.elements.newRecordForm.reset();
+          this.elements.spotStatusDisplay.textContent = '-';
+          this.retrievedSpotNumber = '';
           if (this.selectedDate === newRecord.entryDate) {
               this.fetchAndDisplayRecords(this.selectedDate);
           }
