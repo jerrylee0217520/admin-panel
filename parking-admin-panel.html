@@ -119,7 +119,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc, getDocs, collection, query, where, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, getDocs, collection, query, where, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
@@ -131,13 +131,13 @@
       appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
     
-    const ADMIN_UIDS = ["8dYFqXhM4gVQr9MTEI5z3P4Xn9p2", "KcaxVmcqI3RzxWdhCl2dhVGPxti1"];
+    const ADMIN_UIDS = ["8dYFqXhM4gVQr_MTEI5z3P4Xn9p2", "KcaxVmcqI3RzxWdhCl2dhVGPxti1"];
 
     const App = {
       db: null, auth: null, user: null,
       elements: {},
       records: [], vehicles: [], entryTimeChart: null, selectedDate: '',
-      retrievedSpotNumber: '', 
+      retrievedSpotNumber: '',
 
       init() {
         const app = initializeApp(firebaseConfig);
@@ -297,7 +297,7 @@
             const querySnapshot = await getDocs(q);
             this.records = [];
             querySnapshot.forEach(doc => { this.records.push({ id: doc.id, ...doc.data() }); });
-            this.records.sort((a,b) => b.entryTime.localeCompare(a.entryTime));
+            this.records.sort((a,b) => b.entryTime.seconds - a.entryTime.seconds);
             this.displayRecords();
             this.updateChart();
         } catch(error) {
@@ -318,6 +318,15 @@
         );
       },
 
+      // ##### NEW: Function to safely convert timestamp or string to Date object #####
+      parseTimestamp(timestamp) {
+        if (!timestamp) return null;
+        if (typeof timestamp.toDate === 'function') {
+          return timestamp.toDate(); // It's a Firestore Timestamp
+        }
+        return new Date(timestamp); // It's likely an ISO string
+      },
+
       displayRecords(recordsToDisplay = this.records) {
         this.elements.recordsTableBody.innerHTML = '';
         if (recordsToDisplay.length === 0) {
@@ -325,9 +334,9 @@
           return;
         }
         recordsToDisplay.forEach(record => {
-          const entry = new Date(record.entryTime);
-          const exit = record.exitTime ? new Date(record.exitTime) : null;
-          const duration = exit ? Math.round((exit - entry) / 60000) : '-';
+          const entry = this.parseTimestamp(record.entryTime);
+          const exit = this.parseTimestamp(record.exitTime);
+          const duration = (entry && exit) ? Math.round((exit - entry) / 60000) : '-';
           const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '-';
           const spotDisplayText = record.spotNumber ? record.spotNumber : '無';
           const row = `
@@ -350,8 +359,8 @@
               return;
           }
           this.vehicles.forEach(v => {
-              const entry = new Date(v.entryTime);
-              const timeStr = `${entry.getHours().toString().padStart(2, '0')}:${entry.getMinutes().toString().padStart(2, '0')}`;
+              const entry = this.parseTimestamp(v.entryTime);
+              const timeStr = entry ? `${entry.getHours().toString().padStart(2, '0')}:${entry.getMinutes().toString().padStart(2, '0')}` : '時間錯誤';
               const vehicleHTML = `
                 <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg">
                     <div>
@@ -368,8 +377,11 @@
       updateChart() {
         const hourlyCounts = new Array(24).fill(0);
         this.records.forEach(record => {
-            const entryHour = new Date(record.entryTime).getHours();
-            hourlyCounts[entryHour]++;
+            const entry = this.parseTimestamp(record.entryTime);
+            if (entry) {
+                const entryHour = entry.getHours();
+                hourlyCounts[entryHour]++;
+            }
         });
         this.entryTimeChart.data.datasets[0].data = hourlyCounts;
         this.entryTimeChart.update();
@@ -402,7 +414,7 @@
         const now = new Date();
         const newRecord = {
           licensePlate: plate, unit: unit, spotNumber: spotNumber,
-          entryTime: now.toISOString(),
+          entryTime: serverTimestamp(),
           entryDate: now.toISOString().split('T')[0],
           exitTime: null, status: 'present'
         };
@@ -424,11 +436,10 @@
 
       async checkOut(docId) {
         if (!docId) return;
-        const now = new Date();
         const recordRef = doc(this.db, 'parking_records', docId);
         try {
           await updateDoc(recordRef, {
-            exitTime: now.toISOString(),
+            exitTime: serverTimestamp(),
             status: 'departed'
           });
           this.fetchAndDisplayRecords(this.selectedDate);
@@ -446,10 +457,10 @@
         let csvContent = "\uFEFF";
         csvContent += "車牌號碼,戶別,車位編號,入場時間,出場時間,停放時長\n";
         this.records.forEach(record => {
-            const entry = new Date(record.entryTime);
-            const exit = record.exitTime ? new Date(record.exitTime) : null;
+            const entry = this.parseTimestamp(record.entryTime);
+            const exit = this.parseTimestamp(record.exitTime);
             const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '';
-            const duration = exit ? Math.round((exit - entry) / 60000) : '';
+            const duration = (entry && exit) ? Math.round((exit - entry) / 60000) : '';
             const spotCsvText = record.spotNumber ? record.spotNumber : '無';
             csvContent += `${record.licensePlate},${record.unit},${spotCsvText},${formatTime(entry)},${formatTime(exit)},${duration}\n`;
         });
