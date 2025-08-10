@@ -52,85 +52,80 @@
       <p class="text-gray-500 mt-2">用語音或拍照，快速登記車輛</p>
     </div>
 
-    <div id="error-message" class="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative hidden" role="alert">
-      <strong class="font-bold">錯誤：</strong>
-      <span class="block sm:inline" id="error-text"></span>
+    <div class="mt-4 text-center">
+        <button id="auth-button" class="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition duration-150">登入 Google</button>
+        <p id="user-status" class="mt-2 text-sm text-gray-500">正在初始化...</p>
     </div>
-
-    <div class="mt-6 space-y-4">
-      <div>
-        <label for="carPlate" class="block text-sm font-medium text-gray-700">車牌號碼:</label>
-        <input type="text" id="carPlate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3 text-lg uppercase" placeholder="待辨識...">
-      </div>
-      <div>
-        <label for="huBei" class="block text-sm font-medium text-gray-700">戶別:</label>
-        <input type="text" id="huBei" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3 text-lg uppercase" placeholder="待辨識...">
-      </div>
-    </div>
-
-    <div class="mt-6 grid grid-cols-2 gap-4">
-      <button id="voiceBtn" class="btn-ai flex flex-col items-center justify-center p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700">
-        <i class="fas fa-microphone-alt fa-2x"></i>
-        <span class="mt-2 text-sm font-medium">語音輸入</span>
-      </button>
-      <button id="cameraBtn" class="btn-ai flex flex-col items-center justify-center p-4 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700">
-        <i class="fas fa-camera-retro fa-2x"></i>
-        <span class="mt-2 text-sm font-medium">拍照辨識</span>
-      </button>
-      <input type="file" id="imageUpload" class="hidden" accept="image/*" capture="environment">
-    </div>
-
-    <div id="statusMessage" class="status-message text-center text-gray-600 mt-4 h-6"></div>
-
-    <div class="mt-4">
-      <button id="addRecordBtn" class="w-full py-4 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400">
-        <span id="addBtnText">新增停車</span>
-        <div id="addBtnSpinner" class="spinner w-6 h-6 border-4 border-white rounded-full hidden mx-auto"></div>
-      </button>
-    </div>
-
-    <!-- On-site vehicles list -->
-    <div class="mt-8">
-        <h2 class="text-xl font-bold text-gray-700 mb-4 text-center border-t pt-6">在場車輛</h2>
-        <div id="onSiteList" class="space-y-3">
-            <!-- On-site vehicles will be dynamically added here -->
+    
+    <main id="main-content" class="hidden">
+        <div id="error-message" class="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative hidden" role="alert">
+          <strong class="font-bold">錯誤：</strong>
+          <span class="block sm:inline" id="error-text"></span>
         </div>
-    </div>
 
+        <div class="mt-6 space-y-4">
+          <div>
+            <label for="carPlate" class="block text-sm font-medium text-gray-700">車牌號碼:</label>
+            <input type="text" id="carPlate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3 text-lg uppercase" placeholder="待辨識...">
+          </div>
+          <div>
+            <label for="huBei" class="block text-sm font-medium text-gray-700">戶別:</label>
+            <input type="text" id="huBei" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3 text-lg uppercase" placeholder="輸入簡碼後自動匹配...">
+          </div>
+          <!-- ##### NEW: Spot Status Display ##### -->
+          <div>
+              <label class="block text-sm font-medium text-gray-700">車位狀態:</label>
+              <p id="spot-status-display" class="mt-1 text-lg font-bold text-gray-800">-</p>
+          </div>
+        </div>
+
+        <div class="mt-6 grid grid-cols-2 gap-4">
+          <button id="voiceBtn" class="btn-ai flex flex-col items-center justify-center p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700">
+            <i class="fas fa-microphone-alt fa-2x"></i>
+            <span class="mt-2 text-sm font-medium">語音輸入</span>
+          </button>
+          <button id="cameraBtn" class="btn-ai flex flex-col items-center justify-center p-4 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700">
+            <i class="fas fa-camera-retro fa-2x"></i>
+            <span class="mt-2 text-sm font-medium">拍照辨識</span>
+          </button>
+          <input type="file" id="imageUpload" class="hidden" accept="image/*" capture="environment">
+        </div>
+
+        <div id="statusMessage" class="status-message text-center text-gray-600 mt-4 h-6"></div>
+
+        <div class="mt-4">
+          <button id="addRecordBtn" class="w-full py-4 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400">
+            <span id="addBtnText">新增停車</span>
+            <div id="addBtnSpinner" class="spinner w-6 h-6 border-4 border-white rounded-full hidden mx-auto"></div>
+          </button>
+        </div>
+
+        <div class="mt-8">
+            <h2 class="text-xl font-bold text-gray-700 mb-4 text-center border-t pt-6">在場車輛</h2>
+            <div id="onSiteList" class="space-y-3">
+            </div>
+        </div>
+    </main>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, collection, serverTimestamp, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, serverTimestamp, onSnapshot, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // --- 設定 ---
     const USER_PROVIDED_API_KEY = "AIzaSyCspWUkVA6STWgjrLeXVgg5JnWnJWTKAtU";
     
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    let firebaseConfig;
-    let useTokenAuth = false;
+    const firebaseConfig = {
+        apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
+        authDomain: "jy-2025.firebaseapp.com",
+        projectId: "jy-2025",
+        storageBucket: "jy-2025.appspot.com",
+        messagingSenderId: "640527461851",
+        appId: "1:640527461851:web:eed9f82d698275371fcbfe",
+    };
+    
+    const ADMIN_UIDS = ["KcaxVmcqI3RzxWdhCl2dhVGPxti1", "8dYFqXhM4gVQr9MTEI5z3P4Xn9p2"];
 
-    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-        firebaseConfig = JSON.parse(__firebase_config);
-        useTokenAuth = true;
-    } else {
-        console.warn("未偵測到 Firebase 環境設定，將使用備用設定。");
-        firebaseConfig = {
-            apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
-            authDomain: "jy-2025.firebaseapp.com",
-            projectId: "jy-2025",
-            storageBucket: "jy-2025.appspot.com",
-            messagingSenderId: "640527461851",
-            appId: "1:640527461851:web:eed9f82d698275371fcbfe",
-            measurementId: "G-HVEVMTSR9L"
-        };
-    }
-    
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-    const collectionPath = `/artifacts/${appId}/public/data/parking-records`;
-    
-    // --- DOM 元素 ---
     const carPlateInput = document.getElementById('carPlate');
     const huBeiInput = document.getElementById('huBei');
     const addRecordBtn = document.getElementById('addRecordBtn');
@@ -143,13 +138,17 @@
     const addBtnText = document.getElementById('addBtnText');
     const addBtnSpinner = document.getElementById('addBtnSpinner');
     const onSiteList = document.getElementById('onSiteList');
-
-    // --- 全域變數 ---
-    let db, auth;
+    const authButton = document.getElementById('auth-button');
+    const userStatus = document.getElementById('user-status');
+    const mainContent = document.getElementById('main-content');
+    const spotStatusDisplay = document.getElementById('spot-status-display');
+    
+    let db, auth, user;
+    let onSiteListenerUnsubscribe = null;
+    let retrievedSpotNumber = '';
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
 
-    // --- 住戶資料 ---
     const allHuBeiList = [
         '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓',
         '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓',
@@ -159,8 +158,6 @@
         '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓',
         '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
     ];
-
-    // --- 核心功能 ---
 
     function showError(message) {
       errorText.textContent = message;
@@ -184,28 +181,56 @@
         const app = initializeApp(firebaseConfig);
         db = getFirestore(app);
         auth = getAuth(app);
-        if (useTokenAuth && initialAuthToken) {
-          await signInWithCustomToken(auth, initialAuthToken);
-        } else {
-          await signInAnonymously(auth);
-        }
-        setupRealtimeListener(); // Start listening after auth
+        onAuthStateChanged(auth, (currentUser) => {
+            user = currentUser;
+            updateAuthUI();
+        });
       } catch (e) {
         console.error("Firebase Initialization failed:", e);
         showError("無法連接至伺服器。");
       }
     }
 
+    async function handleAuth() {
+        if (user) {
+            await signOut(auth);
+        } else {
+            const provider = new GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
+            try {
+                await signInWithPopup(auth, provider);
+            } catch (error) {
+                console.error("登入失敗:", error);
+                showError("Google 登入失敗。");
+            }
+        }
+    }
+
+    function updateAuthUI() {
+        if (user && ADMIN_UIDS.includes(user.uid)) {
+            userStatus.textContent = `管理員已登入: ${user.displayName || user.email}`;
+            authButton.textContent = '登出';
+            mainContent.classList.remove('hidden');
+            setupRealtimeListener();
+        } else {
+            userStatus.textContent = '請登入管理員帳號以繼續。';
+            authButton.textContent = '登入 Google';
+            mainContent.classList.add('hidden');
+            if (onSiteListenerUnsubscribe) {
+                onSiteListenerUnsubscribe();
+            }
+        }
+    }
+
     function getApiKey() {
         const key = USER_PROVIDED_API_KEY || firebaseConfig.apiKey;
         if (!key) {
-            showError("錯誤：未設定 API 金鑰。");
+            showError("錯誤：未設定 AI API 金鑰。");
             return null;
         }
         return key;
     }
 
-    // --- AI 功能: 語音辨識 ---
     function setupSpeechRecognition() {
       if (!SpeechRecognition) {
         showError("您的瀏覽器不支援語音辨識功能。");
@@ -215,14 +240,12 @@
       recognition = new SpeechRecognition();
       recognition.lang = 'zh-TW';
       recognition.interimResults = false;
-
       recognition.onstart = () => { statusMessage.textContent = '正在聆聽...'; };
       recognition.onresult = async (event) => {
         const speechResult = event.results[0][0].transcript;
         statusMessage.textContent = `正在處理: "${speechResult}"`;
         await parseSpeechWithAI(speechResult);
       };
-      recognition.onend = () => {};
       recognition.onerror = (event) => {
         showError(`語音辨識錯誤: ${event.error}`);
         statusMessage.textContent = '';
@@ -238,34 +261,31 @@
               contents: [{ role: "user", parts: [{ text: prompt }] }],
               generationConfig: {
                   responseMimeType: "application/json",
-                  responseSchema: {
-                      type: "OBJECT",
-                      properties: { "carPlate": { "type": "STRING" }, "huBei": { "type": "STRING" } },
-                      required: ["carPlate", "huBei"]
-                  }
+                  responseSchema: { type: "OBJECT", properties: { "carPlate": { "type": "STRING" }, "huBei": { "type": "STRING" } }, required: ["carPlate", "huBei"] }
               }
             };
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) { throw new Error(`API 請求失敗: ${response.status}.`); }
             const result = await response.json();
-            if (result.candidates && result.candidates.length > 0) {
-                const part = result.candidates[0].content.parts[0];
-                const parsedJson = JSON.parse(part.text);
+            if (result.candidates && result.candidates[0]) {
+                const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
                 if (parsedJson.carPlate) { carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, ''); }
-                if (parsedJson.huBei) { huBeiInput.value = parsedJson.huBei.toUpperCase(); huBeiInput.dispatchEvent(new Event('blur')); }
+                if (parsedJson.huBei) { 
+                    huBeiInput.value = parsedJson.huBei.toUpperCase();
+                    // Trigger change event to run matching logic
+                    huBeiInput.dispatchEvent(new Event('change'));
+                }
                 statusMessage.textContent = 'AI 辨識完成！';
             } else { throw new Error('無效的 AI 回應。'); }
         } catch (error) {
             console.error('AI 語音解析錯誤:', error);
             showError(`AI 語音解析失敗: ${error.message}`);
-            statusMessage.textContent = '解析失敗，請手動輸入。';
         } finally {
             setTimeout(() => { if (statusMessage.textContent === 'AI 辨識完成！') statusMessage.textContent = ''; }, 2000);
         }
     }
 
-    // --- AI 功能: 圖像辨識 ---
     async function handleImageUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -289,9 +309,8 @@
                 const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) { throw new Error(`API 請求失敗: ${response.status}.`); }
                 const result = await response.json();
-                if (result.candidates && result.candidates.length > 0) {
-                    const part = result.candidates[0].content.parts[0];
-                    const parsedJson = JSON.parse(part.text);
+                if (result.candidates && result.candidates[0]) {
+                    const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
                     if (parsedJson.carPlate) {
                         carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, '');
                         statusMessage.textContent = '車牌辨識成功！';
@@ -300,7 +319,6 @@
             } catch (error) {
                 console.error('AI 辨識錯誤:', error);
                 showError(`AI 辨識失敗: ${error.message}`);
-                statusMessage.textContent = '辨識失敗，請手動輸入。';
             } finally {
                 addRecordBtn.disabled = false;
                 imageUpload.value = '';
@@ -310,15 +328,18 @@
         reader.readAsDataURL(file);
     }
 
-    // --- 資料庫與畫面渲染 ---
     function setupRealtimeListener() {
+      if (onSiteListenerUnsubscribe) onSiteListenerUnsubscribe();
       try {
-        const collectionRef = collection(db, collectionPath);
-        onSnapshot(collectionRef, (snapshot) => {
-          const allRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          const onSiteRecords = allRecords.filter(record => !record.leaveTime);
+        const collectionRef = collection(db, 'parking_records'); // CORRECTED PATH
+        const q = query(collectionRef, where("status", "==", "present"));
+        onSiteListenerUnsubscribe = onSnapshot(q, (snapshot) => {
+          const onSiteRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           onSiteRecords.sort((a, b) => (a.entryTime?.seconds || 0) - (b.entryTime?.seconds || 0));
           renderOnSiteList(onSiteRecords);
+        }, (error) => {
+            console.error("Firestore listener failed:", error);
+            showError("讀取在場車輛列表失敗。");
         });
       } catch (e) {
         console.error("Failed to set up Firestore listener:", e);
@@ -337,8 +358,8 @@
             recordEl.className = 'record-card';
             recordEl.innerHTML = `
               <div class="flex-grow">
-                <p class="font-bold text-base text-gray-800">${record.carPlate}</p>
-                <p class="text-sm text-gray-600">${record.huBei}</p>
+                <p class="font-bold text-base text-gray-800">${record.licensePlate}</p>
+                <p class="text-sm text-gray-600">${record.unit} (${record.spotNumber || '無車位'})</p>
               </div>
               <button data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
                 出場
@@ -353,11 +374,44 @@
             });
         });
     }
+    
+    // ##### NEW: Intelligent Comparison Function #####
+    async function handleHuBeiChange() {
+        const shorthandInput = huBeiInput.value;
+        if (!shorthandInput.trim()) {
+            spotStatusDisplay.textContent = '-';
+            retrievedSpotNumber = '';
+            return;
+        }
+        
+        // Step 1: Auto-complete the unit name
+        const fullHuBei = findFullHuBei(shorthandInput);
+        huBeiInput.value = fullHuBei;
+
+        // Step 2: Look up the parking spot for the completed unit name
+        spotStatusDisplay.textContent = '查詢中...';
+        const spotRef = doc(db, 'unit_parking_spots', fullHuBei.toUpperCase());
+        try {
+            const spotSnap = await getDoc(spotRef);
+            if (spotSnap.exists()) {
+                const spotNumber = spotSnap.data().spotNumber || '資料有誤';
+                spotStatusDisplay.textContent = spotNumber;
+                retrievedSpotNumber = spotNumber;
+            } else {
+                spotStatusDisplay.textContent = '無';
+                retrievedSpotNumber = '';
+            }
+        } catch (error) {
+            console.error("查詢車位失敗:", error);
+            spotStatusDisplay.textContent = '查詢失敗';
+            retrievedSpotNumber = '';
+        }
+    }
 
     async function addRecord() {
       const carPlate = carPlateInput.value.trim().toUpperCase();
-      const huBeiInputVal = huBeiInput.value.trim();
-      if (!carPlate || !huBeiInputVal) {
+      const huBei = huBeiInput.value.trim();
+      if (!carPlate || !huBei) {
         showError('車牌號碼和戶別不能為空。');
         return;
       }
@@ -365,17 +419,29 @@
       addBtnText.classList.add('hidden');
       addBtnSpinner.classList.remove('hidden');
       addRecordBtn.disabled = true;
-      const finalHuBei = findFullHuBei(huBeiInputVal);
+      
+      const now = new Date();
+      const docId = `${now.toISOString().split('T')[0]}_${carPlate.replace(/[^a-zA-Z0-9]/g, '')}`;
+      
       try {
-        await setDoc(doc(collection(db, collectionPath)), {
-          carPlate: carPlate, huBei: finalHuBei,
-          entryTime: serverTimestamp(), leaveTime: null
+        await setDoc(doc(db, 'parking_records', docId), { // CORRECTED PATH
+          licensePlate: carPlate, 
+          unit: huBei, 
+          spotNumber: retrievedSpotNumber, // Use the auto-retrieved spot number
+          entryTime: serverTimestamp(), 
+          entryDate: now.toISOString().split('T')[0],
+          exitTime: null,
+          status: 'present'
         });
-        carPlateInput.value = ''; huBeiInput.value = '';
+        carPlateInput.value = ''; 
+        huBeiInput.value = '';
+        spotStatusDisplay.textContent = '-';
+        retrievedSpotNumber = '';
         statusMessage.textContent = '新增成功！';
         setTimeout(() => statusMessage.textContent = '', 2000);
       } catch (e) {
         showError("新增記錄失敗，請檢查網路連線。");
+        console.error("Add record error:", e);
       } finally {
         addBtnText.classList.remove('hidden');
         addBtnSpinner.classList.add('hidden');
@@ -385,7 +451,10 @@
 
     async function leaveRecord(id) {
         try {
-            await updateDoc(doc(db, collectionPath, id), { leaveTime: serverTimestamp() });
+            await updateDoc(doc(db, 'parking_records', id), { // CORRECTED PATH
+                exitTime: serverTimestamp(),
+                status: 'departed'
+            });
             statusMessage.textContent = '出場登記成功！';
             setTimeout(() => statusMessage.textContent = '', 2000);
         } catch (e) {
@@ -393,7 +462,6 @@
         }
     }
     
-    // --- PWA Service Worker ---
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js').then(registration => {
@@ -404,18 +472,13 @@
       });
     }
 
-    // --- 事件監聽 ---
     voiceBtn.addEventListener('click', () => { if (recognition) recognition.start(); });
     cameraBtn.addEventListener('click', () => { imageUpload.click(); });
     imageUpload.addEventListener('change', handleImageUpload);
-    huBeiInput.addEventListener('blur', () => {
-        if (huBeiInput.value.trim()) {
-            huBeiInput.value = findFullHuBei(huBeiInput.value);
-        }
-    });
+    huBeiInput.addEventListener('change', handleHuBeiChange); // MODIFIED: Use 'change' for better UX
     addRecordBtn.addEventListener('click', addRecord);
+    authButton.addEventListener('click', handleAuth);
 
-    // --- 初始化 ---
     initializeFirebase();
     setupSpeechRecognition();
 
