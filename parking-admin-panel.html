@@ -105,7 +105,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getFirestore, getDocs, collection, query, where, onSnapshot, doc, getDoc, addDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, addDoc, getDocs, collection, query, where, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithRedirect, signOut, getRedirectResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
@@ -127,7 +127,6 @@
       records: [], vehicles: [], entryTimeChart: null, selectedDate: '',
       retrievedSpotNumber: '',
       isAuthReady: false,
-      adminUids: [], 
 
       init() {
         const app = initializeApp(firebaseConfig);
@@ -177,6 +176,7 @@
           this.user = user;
           
           if (user) {
+              // 登入成功
               console.log("登入成功，使用者 UID:", user.uid);
               this.elements.userStatus.textContent = `正在驗證權限...`;
               
@@ -189,10 +189,12 @@
                   this.elements.mainContent.classList.add('hidden');
               }
           } else {
+              // 登出狀態
               console.log("已登出，使用者 UID: 無");
               this.elements.userStatus.textContent = '請使用管理員帳號登入以繼續。';
               this.elements.authButton.textContent = '登入 Google';
               this.elements.mainContent.classList.add('hidden');
+              this.isAuthReady = true; 
           }
         });
       },
