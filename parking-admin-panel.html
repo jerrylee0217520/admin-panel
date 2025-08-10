@@ -128,6 +128,7 @@
       elements: {},
       records: [], vehicles: [], entryTimeChart: null, selectedDate: '',
       retrievedSpotNumber: '',
+      isAuthReady: false, // NEW: Flag to track auth state readiness
 
       init() {
         console.log("[DEBUG] App Initializing...");
@@ -137,7 +138,7 @@
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.handleRedirectResult();
+        this.handleRedirectResult(); // This must run before onAuthStateChanged
         this.initAuthWatcher();
         this.initChart();
       },
@@ -177,6 +178,9 @@
         onAuthStateChanged(this.auth, (user) => {
           console.log("[DEBUG] Auth state changed. User:", user ? user.email : 'Logged out');
           this.user = user;
+          if (!this.isAuthReady) {
+              this.isAuthReady = true; // Mark that the initial auth check is complete
+          }
           this.updateAuthUI();
         });
       },
@@ -189,7 +193,7 @@
             if (result) {
                 console.log("[DEBUG] Redirect result processed successfully for user:", result.user.email);
             } else {
-                console.log("[DEBUG] No redirect result found. This is normal on initial load without a redirect.");
+                console.log("[DEBUG] No redirect result found. This is normal on initial load.");
             }
         } catch (error) {
             console.error("[DEBUG] Error processing redirect result:", error);
@@ -209,6 +213,11 @@
       },
       
       updateAuthUI() {
+        if (!this.isAuthReady) {
+            console.log("[DEBUG] Auth not ready yet, skipping UI update.");
+            return; // Don't update UI until initial check is done
+        }
+
         if (this.user) {
             const isAdmin = ADMIN_UIDS.includes(this.user.uid);
             console.log(`[DEBUG] Current UID: ${this.user.uid}`);
