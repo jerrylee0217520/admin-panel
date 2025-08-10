@@ -29,6 +29,10 @@
     .btn:hover {
       transform: translateY(-2px);
     }
+    /* Style for table rows */
+    #records-table-body tr:hover {
+        background-color: #eff6ff; /* blue-50 */
+    }
   </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
@@ -44,7 +48,7 @@
 
     <main id="main-content" class="grid grid-cols-1 lg:grid-cols-3 gap-6 hidden">
       
-      <div class="lg:col-span-1 flex flex-col gap-6">
+      <div class="lg-col-span-1 flex flex-col gap-6">
         <div class="card p-6">
           <h2 class="text-xl font-bold mb-4">新增停車記錄</h2>
           <form id="new-record-form" class="space-y-4">
@@ -318,13 +322,12 @@
         );
       },
 
-      // ##### NEW: Function to safely convert timestamp or string to Date object #####
       parseTimestamp(timestamp) {
         if (!timestamp) return null;
         if (typeof timestamp.toDate === 'function') {
-          return timestamp.toDate(); // It's a Firestore Timestamp
+          return timestamp.toDate();
         }
-        return new Date(timestamp); // It's likely an ISO string
+        return new Date(timestamp);
       },
 
       displayRecords(recordsToDisplay = this.records) {
@@ -339,8 +342,12 @@
           const duration = (entry && exit) ? Math.round((exit - entry) / 60000) : '-';
           const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '-';
           const spotDisplayText = record.spotNumber ? record.spotNumber : '無';
+          
+          // ##### NEW: Conditional Coloring Logic #####
+          const rowClass = !record.spotNumber ? 'bg-yellow-50' : 'bg-white';
+
           const row = `
-            <tr>
+            <tr class="${rowClass}">
               <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${record.licensePlate}</td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${record.unit}</td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${spotDisplayText}</td>
