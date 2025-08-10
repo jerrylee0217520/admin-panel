@@ -1,399 +1,911 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>AI 智慧停車巡檢工具</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>佳元松江社區每日營運儀表板</title>
+
+  <!-- UI / Chart -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></link>
-  <!-- PWA Manifest -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#ffffff"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <!-- Google APIs (Sheets) + Google Identity Services -->
+  <script async src="https://apis.google.com/js/api.js"></script>
+  <script async src="https://accounts.google.com/gsi/client"></script>
+
   <style>
-    html, body {
-      overscroll-behavior-y: contain;
-      background: #f0f4f8;
-      font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+    :root{
+      --primary-color:#00A6A6;--secondary-color:#E55934;--accent-color:#FAD46B;
+      --background-start:#F0F4F8;--background-end:#D9E2EC;--card-bg:rgba(255,255,255,.6);
+      --text-dark:#1A202C;--text-medium:#4A5568;--text-light:#718096;--border-color:rgba(255,255,255,.8);--shadow-color:rgba(0,0,0,.1)
     }
-    .btn-ai {
-      transition: all 0.3s ease;
-    }
-    .btn-ai:active {
-      transform: scale(0.95);
-      background-color: #1e40af;
-    }
-    .status-message {
-      transition: all 0.3s ease;
-    }
-    .spinner {
-      border-top-color: transparent;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    body{font-family:'Noto Sans TC',sans-serif;background-image:linear-gradient(120deg,var(--background-start) 0%,var(--background-end) 100%);color:var(--text-dark)}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    .fade-in{animation:fadeIn .6s ease-out forwards}
+    .card,.kpi-card{background:var(--card-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--border-color);border-radius:1.5rem;box-shadow:0 8px 32px 0 var(--shadow-color);transition:transform .3s ease,box-shadow .4s ease}
+    .card:hover,.kpi-card:hover{transform:translateY(-8px);box-shadow:0 16px 40px 0 var(--shadow-color)}
+    .main-title{font-weight:900;font-size:3rem;background:linear-gradient(45deg,var(--primary-color),var(--secondary-color));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:2px 2px 10px rgba(0,0,0,.05)}
+    .section-title{font-size:2rem;font-weight:700;color:var(--text-dark);position:relative;padding-bottom:.75rem;margin-bottom:1rem}
+    .section-title::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:50px;height:4px;background:linear-gradient(90deg,var(--primary-color),var(--secondary-color));border-radius:2px}
+    .section-subtitle{color:var(--text-medium)}
+    .kpi-card{padding:2rem}.kpi-icon{width:48px;height:48px;margin:0 auto 1rem auto;color:var(--primary-color)}.kpi-value{font-size:3.5rem;font-weight:900;line-height:1;color:var(--text-dark)}.kpi-label{font-size:1rem;font-weight:500;color:var(--text-light);margin-top:.75rem}
+    .form-input{background-color:rgba(255,255,255,.5);border:1px solid var(--border-color);border-radius:.75rem;transition:all .3s ease}
+    .form-input:focus{background-color:#fff;border-color:var(--primary-color);box-shadow:0 0 0 3px rgba(0,166,166,.2);outline:none}
+    .btn-primary{background-image:linear-gradient(45deg,var(--primary-color) 0%,#00c4c4 100%);border:none;border-radius:.75rem;box-shadow:0 4px 15px 0 rgba(0,166,166,.3);transition:all .3s ease;padding:.75rem 1.25rem;color:white;font-weight:700}
+    .btn-primary:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 7px 20px 0 rgba(0,166,166,.4)}
+    .date-navigator{max-width:28rem;padding:.75rem}
+    #date-selector{font-size:1.25rem;font-weight:700;color:var(--text-dark);border:2px solid transparent;text-align:center;padding:.5rem 1rem}
+    #date-selector::-webkit-calendar-picker-indicator{cursor:pointer;filter:invert(.5)}
+    .date-nav-btn{background-color:rgba(255,255,255,.5);border:1px solid var(--border-color);border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--text-medium);transition:all .3s ease}
+    .date-nav-btn:hover:not(:disabled){background-color:#fff;color:var(--primary-color);box-shadow:0 4px 10px rgba(0,0,0,.1)}
+    .date-nav-btn:disabled{opacity:.5;cursor:not-allowed}
+    table{border-radius:1rem;overflow:hidden}
+    th{background-color:rgba(243,244,246,.7);font-weight:700;color:var(--text-dark);text-transform:uppercase;letter-spacing:.05em}
+    tr:last-child td{border-bottom:none}tr:hover{background-color:rgba(230,245,245,.5)}
+    #toast{position:fixed;top:20px;right:20px;padding:1rem 1.5rem;border-radius:.75rem;color:white;font-weight:600;z-index:10000;opacity:0;transform:translateY(-20px);transition:opacity .3s,transform .3s;box-shadow:0 4px 15px rgba(0,0,0,.2)}
+    #toast.show{opacity:1;transform:translateY(0)}.toast-success{background-image:linear-gradient(45deg,var(--primary-color) 0%,#00c4c4 100%)}.toast-error{background-image:linear-gradient(45deg,var(--secondary-color) 0%,#ff7e61 100%)}
   </style>
 </head>
 <body class="antialiased">
-  <div class="max-w-md mx-auto bg-white p-6 rounded-b-xl shadow-lg">
-    <div class="text-center">
-      <h1 class="text-2xl font-bold text-gray-800">AI 智慧停車巡檢工具</h1>
-      <p class="text-gray-500 mt-2">用語音或拍照，快速登記車輛</p>
-    </div>
+  <div id="toast"></div>
 
-    <div class="mt-4 text-center">
-        <button id="auth-button" class="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition duration-150">登入 Google</button>
-        <p id="user-status" class="mt-2 text-sm text-gray-500">正在初始化...</p>
-    </div>
-    
-    <main id="main-content" class="hidden">
-        <div id="error-message" class="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative hidden" role="alert">
-          <strong class="font-bold">錯誤：</strong>
-          <span class="block sm:inline" id="error-text"></span>
-        </div>
+  <div class="container mx-auto p-4 sm:p-6 md:p-8">
+    <header class="text-center mb-16">
+      <h1 class="main-title mb-4">佳元松江社區 營運儀表板</h1>
 
-        <div class="mt-6 space-y-4">
-          <div>
-            <label for="carPlate" class="block text-sm font-medium text-gray-700">車牌號碼:</label>
-            <input type="text" id="carPlate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3 text-lg uppercase" placeholder="待辨識...">
+      <div class="card date-navigator mx-auto flex items-center justify-between space-x-2">
+        <button id="prev-day-btn" class="date-nav-btn" disabled>
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+        <input type="date" id="date-selector" class="form-input flex-grow" disabled>
+        <button id="next-day-btn" class="date-nav-btn" disabled>
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+
+      <p class="text-lg text-gray-500 mt-4">當前日期：<span id="displayDate" class="font-bold"></span></p>
+      <div class="mt-6">
+        <button id="auth-button" class="btn-primary px-6 py-3 text-lg">登入 Google</button>
+      </div>
+      <p id="user-status" class="mt-3 text-gray-500">正在初始化...</p>
+    </header>
+
+    <section id="input-form" class="mb-16 hidden">
+      <main class="card max-w-4xl mx-auto p-6 sm:p-8">
+        <div class="form-section">
+          <h2 class="text-2xl font-semibold mb-4 text-[#E55934]">社區動態輸入</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><label class="block mb-2">總裝潢施作戶數</label><input type="number" id="totalRenovation" class="form-input" value="14"></div>
+            <div><label class="block mb-2">本日申請裝潢戶數</label><input type="number" id="newRenovation" class="form-input" value="0"></div>
+            <div><label class="block mb-2">本日裝潢驗退戶數</label><input type="number" id="renovationRetired" class="form-input" value="0"></div>
+            <div><label class="block mb-2">裝潢總計（累計）</label><input type="number" id="totalRenovationAccum" class="form-input" value="20"></div>
+            <div><label class="block mb-2">已驗退戶（累計）</label><input type="number" id="totalRenovationRetiredAccum" class="form-input" value="6"></div>
+            <div><label class="block mb-2">本日交屋戶數</label><input type="text" id="newMoveIn" class="form-input" value="0"></div>
+            <div><label class="block mb-2">總戶數</label><input type="number" id="totalHouseholds" class="form-input" value="40"></div>
           </div>
-          <div>
-            <label for="huBei" class="block text-sm font-medium text-gray-700">戶別:</label>
-            <input type="text" id="huBei" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3 text-lg uppercase" placeholder="輸入簡碼後自動匹配...">
+        </div>
+
+        <div class="form-section">
+          <h2 class="text-2xl font-semibold mb-4 text-[#E55934]">停車紀錄</h2>
+          <div id="parking-records-display-input" class="space-y-2 text-gray-600">
+             <p>請由此匯入今日停車紀錄 CSV 檔案。</p>
           </div>
-          <div>
-              <label class="block text-sm font-medium text-gray-700">車位狀態:</label>
-              <p id="spot-status-display" class="mt-1 text-lg font-bold text-gray-800">-</p>
+          <input type="file" id="csv-file-input" class="hidden" accept=".csv">
+          <button id="import-csv-btn" class="mt-4 btn-primary">從 CSV 匯入停車紀錄</button>
+        </div>
+
+        <div class="form-section">
+          <h2 class="text-2xl font-semibold mb-4 text-[#E55934]">每日清點</h2>
+          <div class="space-y-2">
+            <div class="flex items-center"><input type="checkbox" id="check1" checked class="h-4 w-4 text-[#00A6A6] border-gray-300 rounded"><label for="check1" class="ml-2 text-sm">公共區域門窗安全檢查</label></div>
+            <div class="flex items-center"><input type="checkbox" id="check2" class="h-4 w-4 text-[#00A6A6] border-gray-300 rounded"><label for="check2" class="ml-2 text-sm">無郵件及包裹點交</label></div>
+            <div class="flex items-center"><input type="checkbox" id="check3" checked class="h-4 w-4 text-[#00A6A6] border-gray-300 rounded"><label for="check3" class="ml-2 text-sm">施工圍籬與施工車輛停放位置確認</label></div>
           </div>
         </div>
 
-        <div class="mt-6 grid grid-cols-2 gap-4">
-          <button id="voiceBtn" class="btn-ai flex flex-col items-center justify-center p-4 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700">
-            <i class="fas fa-microphone-alt fa-2x"></i>
-            <span class="mt-2 text-sm font-medium">語音輸入</span>
-          </button>
-          <button id="cameraBtn" class="btn-ai flex flex-col items-center justify-center p-4 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700">
-            <i class="fas fa-camera-retro fa-2x"></i>
-            <span class="mt-2 text-sm font-medium">拍照辨識</span>
-          </button>
-          <input type="file" id="imageUpload" class="hidden" accept="image/*" capture="environment">
+        <div class="form-section">
+          <h2 class="text-2xl font-semibold mb-4 text-[#E55934]">今日工作事項</h2>
+          <div id="tasks-container" class="space-y-4"></div>
+          <button id="addTaskBtn" class="mt-4 text-[#00A6A6] font-semibold">＋ 新增工作事項</button>
         </div>
 
-        <div id="statusMessage" class="status-message text-center text-gray-600 mt-4 h-6"></div>
-
-        <div class="mt-4">
-          <button id="addRecordBtn" class="w-full py-4 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400">
-            <span id="addBtnText">新增停車</span>
-            <div id="addBtnSpinner" class="spinner w-6 h-6 border-4 border-white rounded-full hidden mx-auto"></div>
-          </button>
+        <div class="form-section">
+          <h2 class="text-2xl font-semibold mb-4 text-[#E55934]">人員編制</h2>
+          <div class="space-y-4">
+            <div><label class="block mb-2">經理姓名</label><input type="text" id="managerName" class="form-input" value="李俊煌"></div>
+            <div><label class="block mb-2">今日出勤</label><input type="text" id="todayShift" class="form-input" value="早班 08:00–17:00"></div>
+            <div><label class="block mb-2">明日出勤</label><input type="text" id="tomorrowShift" class="form-input" value="休假"></div>
+            <div><label class="block mb-2">備註</label><textarea id="shiftNotes" class="form-input" rows="4">兼任保全巡場、門禁與安檢工作</textarea></div>
+          </div>
         </div>
-    </main>
+
+        <div class="text-center space-x-4 mt-6">
+          <button id="save-log-btn" class="btn-primary">儲存日誌</button>
+          <button id="export-to-sheets-btn" class="btn-primary">匯出至 Google Sheets</button>
+          <button id="generate-csv-btn" class="btn-primary">產生 CSV (備用)</button>
+        </div>
+      </main>
+    </section>
+
+    <section id="dashboard-display" class="mb-16">
+      <h2 class="section-title text-3xl">社區核心數據</h2>
+      <p class="section-subtitle">即時掌握社區的關鍵數據，包含總戶數與裝潢進度概覽。</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
+        <div class="kpi-card fade-in"><div class="kpi-icon"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/></svg></div><div id="kpi-total-households" class="kpi-value">-</div><div class="kpi-label">總戶數</div></div>
+        <div class="kpi-card fade-in" style="animation-delay:.1s"><div class="kpi-icon" style="color:var(--secondary-color)"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.43 2.43a4.5 4.5 0 008.636-2.021.75.75 0 00-1.425-.245zM12.75 4.5a4.5 4.5 0 014.5 4.5v8.25a.75.75 0 01-1.5 0v-8.25a3 3 0 00-3-3H6.75a.75.75 0 010-1.5h6z"/></svg></div><div id="kpi-total-renovation" class="kpi-value">-</div><div class="kpi-label">總裝潢施作戶數</div></div>
+        <div class="kpi-card fade-in" style="animation-delay:.2s"><div class="kpi-icon" style="color:var(--accent-color)"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z"/></svg></div><div id="kpi-total-renovation-accum" class="kpi-value">-</div><div class="kpi-label">裝潢總計(累計)</div></div>
+        <div class="kpi-card fade-in" style="animation-delay:.3s"><div class="kpi-icon"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><div id="kpi-renovation-retired-accum" class="kpi-value">-</div><div class="kpi-label">已驗退戶(累計)</div></div>
+      </div>
+    </section>
+
+    <section id="parking-display" class="mb-16">
+      <div class="card max-w-5xl mx-auto p-4 sm:p-6">
+        <h2 class="section-title text-3xl">停車紀錄</h2>
+        <p class="section-subtitle">以下為今日社區停車紀錄清單。</p>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead><tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車牌號碼</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">戶別</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">車位編號</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入場時間</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">出場時間</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">停放時長(分鐘)</th>
+            </tr></thead>
+            <tbody id="parking-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="renovation-progress-display" class="mb-16">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-5xl mx-auto">
+        <div class="card md:col-span-1 p-4 sm:p-6">
+          <h2 class="section-title text-3xl">本日裝潢動態</h2>
+          <p class="section-subtitle">此圓環圖顯示了已申請裝潢的戶別中，正在施工中與已完工驗退的比例。</p>
+          <div class="chart-container"><canvas id="renovationChart"></canvas></div>
+        </div>
+        <div class="card md:col-span-1 p-4 sm:p-6">
+          <h2 class="section-title text-3xl">本日人員編制</h2>
+          <p class="section-subtitle">今日值勤人員的詳細資訊與明日班表。</p>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead><tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">職位</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人員姓名</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">今日出勤</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">明日出勤</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">備註</th>
+              </tr></thead>
+              <tbody id="staffing-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="daily-checklist-display" class="mb-16">
+      <div class="card max-w-5xl mx-auto p-4 sm:p-6">
+        <h2 class="section-title text-3xl">每日清點</h2>
+        <p class="section-subtitle">以下為今日工作日誌中的清點項目與其完成狀態。</p>
+        <div id="checklist-kpi-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      </div>
+    </section>
+
+    <section id="daily-tasks-display" class="mb-16">
+      <div class="card max-w-5xl mx-auto p-4 sm:p-6">
+        <h2 class="section-title text-3xl">今日工作事項</h2>
+        <p class="section-subtitle">以下為今日工作日誌的詳細事項清單。</p>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">事項</th></tr></thead>
+            <tbody id="tasks-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer class="text-center text-gray-500 text-sm mt-12 pb-4">
+      <p>Powered by MAGIC JERRY</p>
+    </footer>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { 
+      getAuth, onAuthStateChanged, signInAnonymously,
+      GoogleAuthProvider, signInWithPopup, signOut
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-    const USER_PROVIDED_API_KEY = "AIzaSyCspWUkVA6STWgjrLeXVgg5JnWnJWTKAtU";
-    
     const firebaseConfig = {
-        apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
-        authDomain: "jy-2025.firebaseapp.com",
-        projectId: "jy-2025",
-        storageBucket: "jy-2025.appspot.com",
-        messagingSenderId: "640527461851",
-        appId: "1:640527461851:web:eed9f82d698275371fcbfe",
+      apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
+      authDomain: "jy-2025.firebaseapp.com",
+      projectId: "jy-2025",
+      storageBucket: "jy-2025.appspot.com",
+      messagingSenderId: "640527461851",
+      appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
-    
+
+    // 規則同步：兩個管理員 UID
     const ADMIN_UIDS = ["KcaxVmcqI3RzxWdhCl2dhVGPxti1", "8dYFqXhM4gVQr9MTEI5z3P4Xn9p2"];
+    const DEFAULT_SHEET_ID = "1DwcrgFncaocK3fil-lT-j5InTV7NwlBjEZjDF_OuhFU";
+    const GOOGLE_API_KEY = "AIzaSyAF90JqId5m1BRfdtc7TlTKWnYI_o5dQAs";
+    const GOOGLE_CLIENT_ID = "948134512517-9thbq35n96ljei8hqks1ngn1mjqquopm.apps.googleusercontent.com";
+    const DISCOVERY_DOC = "https://sheets.googleapis.com/$discovery/rest?version=v4";
+    const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
 
-    const carPlateInput = document.getElementById('carPlate');
-    const huBeiInput = document.getElementById('huBei');
-    const addRecordBtn = document.getElementById('addRecordBtn');
-    const voiceBtn = document.getElementById('voiceBtn');
-    const cameraBtn = document.getElementById('cameraBtn');
-    const imageUpload = document.getElementById('imageUpload');
-    const statusMessage = document.getElementById('statusMessage');
-    const errorMessageEl = document.getElementById('error-message');
-    const errorText = document.getElementById('error-text');
-    const addBtnText = document.getElementById('addBtnText');
-    const addBtnSpinner = document.getElementById('addBtnSpinner');
-    const authButton = document.getElementById('auth-button');
-    const userStatus = document.getElementById('user-status');
-    const mainContent = document.getElementById('main-content');
-    const spotStatusDisplay = document.getElementById('spot-status-display');
-    
-    let db, auth, user;
-    let retrievedSpotNumber = '';
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition;
+    const App = {
+      db:null, auth:null, user:null,
+      currentData:null, // 目前畫面顯示的完整資料，用於匯出 fallback
+      gapiReady:false, gisReady:false, tokenClient:null,
+      renovationChart:null, taskCount:0,
+      parkingData: [],
+      elements:{},
 
-    const allHuBeiList = [
-        '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓',
-        '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓',
-        '6A-6樓', '6B-6樓', '6C-6樓', '6D-6樓', '6E-6樓', '6F-6樓',
-        '5A-5樓', '5B-5樓', '5C-5樓', '5D-5樓', '5E-5樓', '5F-5樓',
-        '4A-4樓', '4B-4樓', '4CD-4樓', '4EF-4樓', '3A-3樓', '3B-3樓',
-        '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓',
-        '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
-    ];
-
-    function showError(message) {
-      errorText.textContent = message;
-      errorMessageEl.classList.remove('hidden');
-    }
-
-    function hideError() {
-      errorMessageEl.classList.add('hidden');
-    }
-
-    function findFullHuBei(shorthandInput) {
-        const input = String(shorthandInput).toUpperCase().trim();
-        if (!input) return shorthandInput;
-        if (input === 'VIP') return '貴賓';
-        const matchedHuBei = allHuBeiList.find(fullHuBei => fullHuBei.toUpperCase().startsWith(input));
-        return matchedHuBei || shorthandInput;
-    }
-
-    async function initializeFirebase() {
-      try {
+      init(){
         const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
-        onAuthStateChanged(auth, (currentUser) => {
-            user = currentUser;
-            updateAuthUI();
-        });
-      } catch (e) {
-        console.error("Firebase Initialization failed:", e);
-        showError("無法連接至伺服器。");
-      }
-    }
+        this.auth = getAuth(app);
+        this.db = getFirestore(app);
 
-    async function handleAuth() {
-        if (user) {
-            await signOut(auth);
-        } else {
+        this.cacheDOMElements();
+        this.bindEvents();
+        this.initDateSelector();
+        this.initChart();
+        this.initAuthWatcher();
+        this.waitGoogleApis();
+      },
+
+      cacheDOMElements(){
+        this.elements = {
+          toast:document.getElementById('toast'),
+          authButton:document.getElementById('auth-button'),
+          userStatus:document.getElementById('user-status'),
+          inputForm:document.getElementById('input-form'),
+          saveLogBtn:document.getElementById('save-log-btn'),
+          dateSelector:document.getElementById('date-selector'),
+          displayDate:document.getElementById('displayDate'),
+          prevDayBtn:document.getElementById('prev-day-btn'),
+          nextDayBtn:document.getElementById('next-day-btn'),
+          exportToSheetsBtn:document.getElementById('export-to-sheets-btn'),
+          importCsvBtn: document.getElementById('import-csv-btn'),
+          csvFileInput: document.getElementById('csv-file-input'),
+          parkingRecordsDisplayInput: document.getElementById('parking-records-display-input'),
+        };
+      },
+
+      bindEvents(){
+        this.elements.authButton.addEventListener('click', async ()=>{
+          const u = this.auth.currentUser;
+          if (u && !u.isAnonymous) { await signOut(this.auth); return; }
+          try{
             const provider = new GoogleAuthProvider();
-            provider.setCustomParameters({ prompt: 'select_account' });
-            try {
-                await signInWithPopup(auth, provider);
-            } catch (error) {
-                console.error("登入失敗:", error);
-                showError("Google 登入失敗。");
-            }
-        }
-    }
+            provider.setCustomParameters({ prompt:'select_account' });
+            await signInWithPopup(this.auth, provider);
+          }catch(e){ console.error('Google 登入錯誤:', e); }
+        });
 
-    function updateAuthUI() {
-        if (user && ADMIN_UIDS.includes(user.uid)) {
-            userStatus.textContent = `管理員已登入: ${user.displayName || user.email}`;
-            authButton.textContent = '登出';
-            mainContent.classList.remove('hidden');
+        this.elements.dateSelector.addEventListener('change', (e)=> this.fetchLogByDate(e.target.value));
+        this.elements.prevDayBtn.addEventListener('click', ()=> this.changeDate(-1));
+        this.elements.nextDayBtn.addEventListener('click', ()=> this.changeDate(1));
+        this.elements.saveLogBtn.addEventListener('click', ()=> this.saveLogToFirestore());
+        this.elements.exportToSheetsBtn.addEventListener('click', ()=> this.exportToSheets());
+
+        document.getElementById('generate-csv-btn').addEventListener('click', ()=> this.generateCsv());
+        document.getElementById('addTaskBtn').addEventListener('click', ()=> this.addTask());
+        
+        this.elements.importCsvBtn.addEventListener('click', () => this.elements.csvFileInput.click());
+        this.elements.csvFileInput.addEventListener('change', (e) => this.handleCsvImport(e));
+
+        document.querySelectorAll('#input-form input, #input-form textarea').forEach(input=>{
+          input.addEventListener('input', ()=> this.updateDashboardFromForm());
+        });
+      },
+
+      initDateSelector(){
+        const today = new Date();
+        today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+        this.elements.dateSelector.value = today.toISOString().split('T')[0];
+      },
+
+      initChart(){
+        const ctx = document.getElementById('renovationChart').getContext('2d');
+        this.renovationChart = new Chart(ctx,{
+          type:'doughnut',
+          data:{labels:['施工中','已驗退'],datasets:[{label:'戶數',data:[0,0],backgroundColor:['#00A6A6','#E55934'],borderColor:'rgba(255,255,255,.6)',borderWidth:4,hoverOffset:8}]},
+          options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{position:'bottom',labels:{padding:20,font:{size:14,family:"'Noto Sans TC', sans-serif"},color:'#4A5568'}}}}
+        });
+      },
+
+      initAuthWatcher(){
+        this.elements.userStatus.innerText = '正在載入 Google API...';
+
+        onAuthStateChanged(this.auth, (user)=>{
+          this.user = user || null;
+          this.updateAuthUI();
+          if (!user) {
+            signInAnonymously(this.auth).catch(err=>{
+              console.error('匿名登入失敗:', err);
+              this.elements.userStatus.innerText = "錯誤：無法連接至資料庫";
+            });
+          } else {
+            this.elements.dateSelector.disabled = false;
+            this.elements.prevDayBtn.disabled = false;
+            this.fetchLogByDate(this.elements.dateSelector.value);
+          }
+        });
+      },
+
+      updateAuthUI(){
+        const user = this.user;
+        const isAdmin = user && !user.isAnonymous && ADMIN_UIDS.includes(user.uid);
+
+        if (user && !user.isAnonymous) {
+          this.elements.authButton.innerText = '登出';
+          if (isAdmin) {
+            this.elements.userStatus.innerText = `管理員模式：${user.displayName || user.email || '已登入'}`;
+            this.elements.inputForm.classList.remove('hidden');
+          } else {
+            this.elements.userStatus.innerText = `訪客模式：${user.displayName || user.email || '已登入'} (無編輯權限)`;
+            this.elements.inputForm.classList.add('hidden');
+          }
         } else {
-            userStatus.textContent = '請登入管理員帳號以繼續。';
-            authButton.textContent = '登入 Google';
-            mainContent.classList.add('hidden');
+          this.elements.userStatus.innerText = '訪客模式，登入以編輯日誌。';
+          this.elements.authButton.innerText = '管理員登入';
+          this.elements.inputForm.classList.add('hidden');
         }
-    }
+      },
 
-    function getApiKey() {
-        const key = USER_PROVIDED_API_KEY || firebaseConfig.apiKey;
-        if (!key) {
-            showError("錯誤：未設定 AI API 金鑰。");
-            return null;
-        }
-        return key;
-    }
+      waitGoogleApis(){
+        const waitFor = (cond, cb)=>{ const t=setInterval(()=>{ if(cond()){clearInterval(t); cb();}},50); };
+        let timeoutShown = false;
+        const timeoutId = setTimeout(()=>{
+          if(!this.gapiReady || !this.gisReady){
+            timeoutShown = true;
+            this.showToast('Google API 載入較慢，請稍候或重整頁面', 'error');
+          }
+        }, 10000);
 
-    function setupSpeechRecognition() {
-      if (!SpeechRecognition) {
-        showError("您的瀏覽器不支援語音辨識功能。");
-        voiceBtn.disabled = true;
-        return;
-      }
-      recognition = new SpeechRecognition();
-      recognition.lang = 'zh-TW';
-      recognition.interimResults = false;
-      recognition.onstart = () => { statusMessage.textContent = '正在聆聽...'; };
-      recognition.onresult = async (event) => {
-        const speechResult = event.results[0][0].transcript;
-        statusMessage.textContent = `正在處理: "${speechResult}"`;
-        await parseSpeechWithAI(speechResult);
-      };
-      recognition.onerror = (event) => {
-        showError(`語音辨識錯誤: ${event.error}`);
-        statusMessage.textContent = '';
-      };
-    }
-
-    async function parseSpeechWithAI(text) {
-        const apiKey = getApiKey();
-        if (!apiKey) return;
-        try {
-            const prompt = `從以下這段中文語句中，提取出車牌號碼和戶別資訊。車牌號碼通常由英文字母和數字組成。戶別可能是樓層、房號，或是如"施工"、"貴賓"等特殊詞彙。請以JSON格式回傳，鍵值分別為 'carPlate' 和 'huBei'。語句: "${text}"`;
-            const payload = {
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
-              generationConfig: {
-                  responseMimeType: "application/json",
-                  responseSchema: { type: "OBJECT", properties: { "carPlate": { "type": "STRING" }, "huBei": { "type": "STRING" } }, required: ["carPlate", "huBei"] }
-              }
-            };
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!response.ok) { throw new Error(`API 請求失敗: ${response.status}.`); }
-            const result = await response.json();
-            if (result.candidates && result.candidates[0]) {
-                const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
-                if (parsedJson.carPlate) { carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, ''); }
-                if (parsedJson.huBei) { 
-                    huBeiInput.value = parsedJson.huBei.toUpperCase();
-                    huBeiInput.dispatchEvent(new Event('change'));
+        waitFor(()=> window.gapi && window.gapi.load, ()=>{
+          gapi.load('client', async ()=>{
+            try{
+              await gapi.client.init({ apiKey: GOOGLE_API_KEY, discoveryDocs:[DISCOVERY_DOC] });
+              this.gapiReady = true;
+              this.maybeApisReady();
+            }catch(e){ console.error('GAPI 初始化失敗', e); this.showToast('GAPI 初始化失敗','error'); }
+          });
+        });
+        waitFor(()=> window.google && window.google.accounts && window.google.accounts.oauth2, ()=>{
+          try{
+            this.tokenClient = google.accounts.oauth2.initTokenClient({
+              client_id: GOOGLE_CLIENT_ID,
+              scope: SCOPES,
+              callback: async (tokenResponse)=>{
+                if (tokenResponse && tokenResponse.access_token) {
+                  await this.appendDataToSheet(DEFAULT_SHEET_ID);
+                } else {
+                  this.showToast('Google 授權失敗或被取消。','error');
                 }
-                statusMessage.textContent = 'AI 辨識完成！';
-            } else { throw new Error('無效的 AI 回應。'); }
-        } catch (error) {
-            console.error('AI 語音解析錯誤:', error);
-            showError(`AI 語音解析失敗: ${error.message}`);
-        } finally {
-            setTimeout(() => { if (statusMessage.textContent === 'AI 辨識完成！') statusMessage.textContent = ''; }, 2000);
-        }
-    }
+              },
+              prompt: ''
+            });
+            this.gisReady = true;
+            this.maybeApisReady();
+          }catch(e){ console.error('GIS 初始化失敗', e); this.showToast('GIS 初始化失敗','error'); }
+        });
 
-    async function handleImageUpload(event) {
+        const clearTimeoutIfReady = () => {
+          if(this.gapiReady && this.gisReady) clearTimeout(timeoutId);
+        };
+        const observer = setInterval(()=>{
+          clearTimeoutIfReady();
+          if(this.gapiReady && this.gisReady) clearInterval(observer);
+        }, 200);
+      },
+
+      maybeApisReady(){
+        if (this.gapiReady && this.gisReady) {
+          this.showToast('Google API 準備就緒！');
+          this.updateAuthUI();
+        }
+      },
+
+      // ===== CSV/戶別/車位：通用工具 =====
+      parseCSV(text){
+        const rows=[]; let cur='', inQuotes=false, row=[];
+        const pushCell=()=>{ row.push(cur); cur=''; };
+        const pushRow=()=>{ rows.push(row); row=[]; };
+        for(let i=0;i<text.length;i++){
+          const ch=text[i], next=text[i+1];
+          if(ch==='\"'){
+            if(inQuotes && next==='\"'){ cur+='\"'; i++; }
+            else inQuotes=!inQuotes;
+          }else if(ch===',' && !inQuotes){ pushCell(); }
+          else if((ch==='\n' || ch==='\r') && !inQuotes){
+            if(ch==='\r' && next==='\n') i++;
+            pushCell(); pushRow();
+          }else cur+=ch;
+        }
+        if(cur.length>0 || row.length>0){ pushCell(); pushRow(); }
+        return rows;
+      },
+
+      normalizeHuBei(str){
+        const s=(str||'').trim();
+        if(!s) return '';
+        if(s.includes('-')) return s;
+        const m=s.match(/^(\d{1,2})([A-Z]{1,3})$/i);
+        if(!m) return s;
+        return `${m[1]}${m[2].toUpperCase()}-${parseInt(m[1],10)}樓`;
+      },
+
+      resolveDisplaySpot(r){
+        const a=(r.purchaseSpot||'').trim();
+        const b=(r.spotNumber||'').trim();
+        return a || b || '無';
+      },
+
+      async saveLogToFirestore(){
+        if (!this.user || this.user.isAnonymous || !ADMIN_UIDS.includes(this.user.uid))
+          return this.showToast('您沒有權限儲存！', 'error');
+
+        const data = this.getFormData();
+        if (!data.date) return this.showToast('請選擇日期！', 'error');
+        this.elements.saveLogBtn.disabled = true;
+        try{
+          await setDoc(doc(this.db,"daily_logs", data.date), data);
+          this.showToast(`日誌 ${data.date} 已成功儲存！`);
+        }catch(e){
+          console.error("儲存錯誤:", e);
+          this.showToast(e.code === 'permission-denied' ? "權限不足" : `儲存失敗: ${e.message}`, 'error');
+        }finally{
+          this.elements.saveLogBtn.disabled = false;
+        }
+      },
+
+      async fetchLogByDate(date){
+        if (!date) return;
+        try{
+          const docRef = doc(this.db, 'daily_logs', date);
+          const snap = await getDoc(docRef);
+          const isAdmin = this.user && !this.user.isAnonymous && ADMIN_UIDS.includes(this.user.uid);
+          if (snap.exists()) {
+            const data = snap.data();
+            // 確保 state 與畫面一致（避免匯出時沒有停車資料）
+            this.parkingData = Array.isArray(data.parking) ? data.parking : [];
+            this.updateDashboard(data);
+            if (isAdmin) this.updateInputForm(data);
+          } else {
+            const defaultData = this.getFormData();
+            this.parkingData = Array.isArray(defaultData.parking) ? defaultData.parking : [];
+            this.updateDashboard(defaultData);
+            if (isAdmin) this.clearInputForm();
+          }
+        }catch(error){
+          console.error('讀取錯誤:', error);
+          this.showToast(error.code === 'permission-denied' ? "權限不足" : "讀取資料失敗！", 'error');
+          this.updateDashboard(null);
+        }finally{
+          this.updateDateNavButtonsState();
+        }
+      },
+      
+      handleCsvImport(event) {
         const file = event.target.files[0];
         if (!file) return;
-        const apiKey = getApiKey();
-        if (!apiKey) return;
-        statusMessage.textContent = '正在辨識圖片...';
-        addRecordBtn.disabled = true;
+
         const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64ImageData = reader.result.split(',')[1];
-            try {
-                const prompt = "從這張圖片中辨識出車牌號碼，並以JSON格式回傳。車牌號碼的鍵是 'carPlate'。";
-                const payload = {
-                  contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64ImageData } } ] } ],
-                  generationConfig: {
-                      responseMimeType: "application/json",
-                      responseSchema: { type: "OBJECT", properties: { "carPlate": { "type": "STRING" } }, required: ["carPlate"] }
-                  }
-                };
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!response.ok) { throw new Error(`API 請求失敗: ${response.status}.`); }
-                const result = await response.json();
-                if (result.candidates && result.candidates[0]) {
-                    const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
-                    if (parsedJson.carPlate) {
-                        carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, '');
-                        statusMessage.textContent = '車牌辨識成功！';
-                    } else { throw new Error('AI 未能辨識出車牌。'); }
-                } else { throw new Error('無效的 AI 回應。'); }
-            } catch (error) {
-                console.error('AI 辨識錯誤:', error);
-                showError(`AI 辨識失敗: ${error.message}`);
-            } finally {
-                addRecordBtn.disabled = false;
-                imageUpload.value = '';
-                setTimeout(() => { if (statusMessage.textContent === '車牌辨識成功！') statusMessage.textContent = ''; }, 2000);
+        reader.onload = (e) => {
+          let text = e.target.result || '';
+          if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // 去 BOM
+
+          const table = this.parseCSV(text).filter(r => r.length && r.join('').trim() !== '');
+          if (table.length === 0) {
+            this.showToast('CSV 內容為空', 'error');
+            return;
+          }
+
+          const header = table[0].map(h => (h||'').trim());
+          const alias = (name) => {
+            const n = (name||'').toLowerCase();
+            return n
+              .replace(/[\s_]/g,'')
+              .replace('號碼','')
+              .replace('minutes','')
+              .replace('（分鐘）','(分鐘)')
+              .replace('（分）','(分)')
+              .replace('(分鐘)','(分)'); // 統一視為(分)
+          };
+          const idx = (keys) => {
+            const candidates = keys.map(k => alias(k));
+            for (let i=0;i<header.length;i++){
+              const h = alias(header[i]);
+              if (candidates.includes(h)) return i;
             }
+            return -1;
+          };
+
+          const iCar = idx(['車牌','車牌號碼','plate','carplate','license']);
+          const iUnit = idx(['戶別','單元','unit','hubei']);
+          const iSpot = idx(['車位編號','車位','spotnumber','spot','slot']);
+          const iPurchased = idx(['購買車位','purchase','purchasespot','ownedspot','owned']);
+          const iIn = idx(['入場時間','進場時間','entrytime','in','start']);
+          const iOut = idx(['出場時間','離場時間','exittime','out','end']);
+          const iDur = idx(['停放時長(分鐘)','停放時長(分)','停放時長','時長','duration','minutes','minute']);
+
+          const rows = table.slice(1).map(r => {
+            const pick = (i)=> (i>=0 && r[i]!=null) ? String(r[i]).trim() : '';
+            const obj = {
+              carPlate: pick(iCar),
+              huBei: this.normalizeHuBei(pick(iUnit)),
+              spotNumber: pick(iSpot),
+              purchaseSpot: pick(iPurchased),
+              entryTime: pick(iIn),
+              exitTime: pick(iOut),
+              duration: pick(iDur)
+            };
+            // 若無時長，嘗試由時間推算（支援 YYYY/MM/DD HH:mm 或 HH:mm）
+            if (!obj.duration) {
+              const parseDT = (s)=>{
+                if(!s) return NaN;
+                const v = s.trim();
+                if (/^\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}$/.test(v)) {
+                  const [d,t] = v.split(/\s+/);
+                  const [Y,M,D] = d.split('/').map(Number);
+                  const [h,m] = t.split(':').map(Number);
+                  return new Date(Y, M-1, D, h, m).getTime();
+                }
+                if (/^\d{2}:\d{2}$/.test(v)) {
+                  const [h,m] = v.split(':').map(Number);
+                  return new Date(1970,0,1,h,m).getTime();
+                }
+                return NaN;
+              };
+              if (obj.entryTime && obj.exitTime) {
+                const a = parseDT(obj.entryTime), b = parseDT(obj.exitTime);
+                if (!Number.isNaN(a) && !Number.isNaN(b)) {
+                  const mins = Math.max(0, Math.round((b-a)/60000));
+                  obj.duration = String(mins);
+                }
+              }
+            }
+            return obj;
+          }).filter(o => o.carPlate || o.huBei || o.entryTime || o.exitTime);
+
+          this.parkingData = rows;
+
+          // 左側摘要
+          this.showToast(`成功匯入 ${this.parkingData.length} 筆停車紀錄`, 'success');
+          this.elements.parkingRecordsDisplayInput.innerHTML = '';
+          const list = document.createElement('ul');
+          list.className = 'list-disc list-inside space-y-1 text-sm';
+          this.parkingData.forEach(r => {
+            const item = document.createElement('li');
+            item.textContent = `車牌: ${r.carPlate || '-'}, 戶別: ${r.huBei || '-'}, 車位: ${this.resolveDisplaySpot(r)}`;
+            list.appendChild(item);
+          });
+          this.elements.parkingRecordsDisplayInput.appendChild(list);
+
+          this.updateDashboardFromForm();
         };
-        reader.readAsDataURL(file);
-    }
-    
-    async function handleHuBeiChange() {
-        const shorthandInput = huBeiInput.value;
-        if (!shorthandInput.trim()) {
-            spotStatusDisplay.textContent = '-';
-            retrievedSpotNumber = '';
+        reader.onerror = () => this.showToast('讀取檔案失敗', 'error');
+        reader.readAsText(file, 'UTF-8');
+        event.target.value = '';
+      },
+
+      getFormData(){
+        const date = this.elements.dateSelector.value;
+        const totalRenovation = document.getElementById('totalRenovation').value;
+        const newRenovation = document.getElementById('newRenovation').value;
+        const renovationRetired = document.getElementById('renovationRetired').value;
+        const totalRenovationAccum = document.getElementById('totalRenovationAccum').value;
+        const totalRenovationRetiredAccum = document.getElementById('totalRenovationRetiredAccum').value;
+        const newMoveIn = document.getElementById('newMoveIn').value;
+        const totalHouseholds = document.getElementById('totalHouseholds').value;
+        const managerName = document.getElementById('managerName').value;
+        const todayShift = document.getElementById('todayShift').value;
+        const tomorrowShift = document.getElementById('tomorrowShift').value;
+        const shiftNotes = document.getElementById('shiftNotes').value;
+        const check1 = document.getElementById('check1').checked;
+        const check2 = document.getElementById('check2').checked;
+        const check3 = document.getElementById('check3').checked;
+        const tasks = Array.from(document.querySelectorAll('#tasks-container input')).map(el=>el.value).filter(v=>v.trim()!=='');
+
+        // 匯出時的停車資料：優先採用最新匯入的 parkingData，否則退回目前畫面顯示的 currentData.parking
+        const parkingFromState = Array.isArray(this.parkingData) && this.parkingData.length > 0
+          ? this.parkingData
+          : (this.currentData && Array.isArray(this.currentData.parking) ? this.currentData.parking : []);
+
+        return {
+          date,
+          community:{ totalRenovation,newRenovation,renovationRetired,totalRenovationAccum,totalRenovationRetiredAccum,newMoveIn,totalHouseholds },
+          checklist:{ check1,check2,check3 },
+          tasks,
+          staff:{ managerName,todayShift,tomorrowShift,shiftNotes },
+          parking: parkingFromState
+        };
+      },
+
+      updateDashboard(data){
+        // 保存目前顯示資料，供匯出 fallback 使用
+        this.currentData = data || null;
+
+        const dateObj = new Date(this.elements.dateSelector.value + 'T00:00:00');
+        this.elements.displayDate.innerText = dateObj.toLocaleDateString('zh-TW',{year:'numeric',month:'long',day:'numeric'});
+
+        if (!data){
+          this.elements.displayDate.innerText = '請選擇日期或該日無資料';
+          ['kpi-total-households','kpi-total-renovation','kpi-total-renovation-accum','kpi-renovation-retired-accum'].forEach(id=>document.getElementById(id).innerText='-');
+          ['checklist-kpi-container','staffing-table-body','tasks-table-body','parking-table-body'].forEach(id=>document.getElementById(id).innerHTML='');
+          if (this.renovationChart){ this.renovationChart.data.datasets[0].data=[0,0]; this.renovationChart.update(); }
+          return;
+        }
+
+        document.getElementById('kpi-total-households').innerText = data.community.totalHouseholds || '-';
+        document.getElementById('kpi-total-renovation').innerText = data.community.totalRenovation || '-';
+        document.getElementById('kpi-total-renovation-accum').innerText = data.community.totalRenovationAccum || '-';
+        document.getElementById('kpi-renovation-retired-accum').innerText = data.community.totalRenovationRetiredAccum || '-';
+
+        document.getElementById('checklist-kpi-container').innerHTML = `
+          <div class="kpi-card text-center"><div class="kpi-value ${data.checklist.check1 ? 'text-[#00A6A6]' : 'text-[#E55934]'}">${data.checklist.check1 ? '✓' : 'X'}</div><div class="kpi-label">公共區域門窗安全檢查</div></div>
+          <div class="kpi-card text-center"><div class="kpi-value ${data.checklist.check2 ? 'text-[#00A6A6]' : 'text-[#E55934]'}">${data.checklist.check2 ? '✓' : 'X'}</div><div class="kpi-label">無郵件及包裹點交</div></div>
+          <div class="kpi-card text-center"><div class="kpi-value ${data.checklist.check3 ? 'text-[#00A6A6]' : 'text-[#E55934]'}">${data.checklist.check3 ? '✓' : 'X'}</div><div class="kpi-label">施工圍籬與施工車輛停放位置確認</div></div>
+        `;
+
+        document.getElementById('staffing-table-body').innerHTML = `
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">經理</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.staff.managerName || '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.staff.todayShift || '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.staff.tomorrowShift || '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${data.staff.shiftNotes || '-'}</td>
+          </tr>
+        `;
+
+        const tasksBody = document.getElementById('tasks-table-body');
+        tasksBody.innerHTML='';
+        (data.tasks||[]).forEach(task=>{ if(task) tasksBody.insertAdjacentHTML('beforeend', `<tr><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${task}</td></tr>`); });
+        
+        const parkingBody = document.getElementById('parking-table-body');
+        parkingBody.innerHTML = '';
+        const parkingDataToDisplay = data.parking || [];
+        if (parkingDataToDisplay.length === 0) {
+            parkingBody.innerHTML = `<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">本日無停車紀錄</td></tr>`;
+        } else {
+            parkingDataToDisplay.forEach(r => {
+                const finalSpot = this.resolveDisplaySpot(r);
+                parkingBody.insertAdjacentHTML('beforeend', `
+                  <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${r.carPlate || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${r.huBei || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${finalSpot}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${r.entryTime || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${r.exitTime || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${r.duration || '-'}</td>
+                  </tr>
+                `);
+            });
+        }
+
+        if (this.renovationChart){
+          const retired = parseInt(data.community.totalRenovationRetiredAccum) || 0;
+          const inProgress = (parseInt(data.community.totalRenovationAccum)||0) - retired;
+          this.renovationChart.data.datasets[0].data = [inProgress<0?0:inProgress, retired];
+          this.renovationChart.update();
+        }
+      },
+
+      updateInputForm(data){
+        if(!data) return;
+        document.getElementById('totalRenovation').value = data.community.totalRenovation || '';
+        document.getElementById('newRenovation').value = data.community.newRenovation || '';
+        document.getElementById('renovationRetired').value = data.community.renovationRetired || '';
+        document.getElementById('totalRenovationAccum').value = data.community.totalRenovationAccum || '';
+        document.getElementById('totalRenovationRetiredAccum').value = data.community.totalRenovationRetiredAccum || '';
+        document.getElementById('newMoveIn').value = data.community.newMoveIn || '';
+        document.getElementById('totalHouseholds').value = data.community.totalHouseholds || '';
+        document.getElementById('check1').checked = data.checklist.check1 || false;
+        document.getElementById('check2').checked = data.checklist.check2 || false;
+        document.getElementById('check3').checked = data.checklist.check3 || false;
+        document.getElementById('managerName').value = data.staff.managerName || '';
+        document.getElementById('todayShift').value = data.staff.todayShift || '';
+        document.getElementById('tomorrowShift').value = data.staff.tomorrowShift || '';
+        document.getElementById('shiftNotes').value = data.staff.shiftNotes || '';
+
+        const tasksContainer = document.getElementById('tasks-container');
+        tasksContainer.innerHTML=''; this.taskCount=0;
+        (data.tasks||[]).forEach(task=> this.addTask(task));
+        if ((data.tasks||[]).length===0) this.addTask();
+        
+        this.parkingData = data.parking || [];
+        this.elements.parkingRecordsDisplayInput.innerHTML = '';
+        if (this.parkingData.length > 0) {
+            const list = document.createElement('ul');
+            list.className = 'list-disc list-inside space-y-1 text-sm';
+            this.parkingData.forEach(r => {
+                const item = document.createElement('li');
+                item.textContent = `車牌: ${r.carPlate}, 戶別: ${r.huBei}, 車位: ${this.resolveDisplaySpot(r)}`;
+                list.appendChild(item);
+            });
+            this.elements.parkingRecordsDisplayInput.appendChild(list);
+        } else {
+            this.elements.parkingRecordsDisplayInput.innerHTML = '<p>請由此匯入今日停車紀錄 CSV 檔案。</p>';
+        }
+      },
+
+      clearInputForm(){
+        document.querySelectorAll('#input-form input[type="text"], #input-form input[type="number"], #input-form textarea').forEach(el=>{ el.value=''; });
+        document.querySelectorAll('#input-form input[type="checkbox"]').forEach(el => { el.checked = false; });
+        const t = document.getElementById('tasks-container'); t.innerHTML=''; this.taskCount=0; this.addTask();
+        
+        this.parkingData = [];
+        this.elements.parkingRecordsDisplayInput.innerHTML = '<p>請由此匯入今日停車紀錄 CSV 檔案。</p>';
+      },
+
+      updateDashboardFromForm(){ this.updateDashboard(this.getFormData()); },
+
+      addTask(val=''){
+        const c = document.getElementById('tasks-container');
+        const i = this.taskCount++;
+        const div = document.createElement('div');
+        div.className = 'flex items-center space-x-2';
+        div.innerHTML = `<input type="text" class="form-input w-full" value="${val}" placeholder="新增事項 ${i+1}">`;
+        div.querySelector('input').addEventListener('input', ()=> this.updateDashboardFromForm());
+        c.appendChild(div);
+      },
+
+      changeDate(offset){
+        const d = new Date(this.elements.dateSelector.value + 'T00:00:00');
+        d.setDate(d.getDate()+offset);
+        const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+        this.elements.dateSelector.value = `${y}-${m}-${day}`;
+        this.elements.dateSelector.dispatchEvent(new Event('change'));
+      },
+
+      updateDateNavButtonsState(){
+        const today = new Date(); today.setHours(0,0,0,0);
+        const selected = new Date(this.elements.dateSelector.value + 'T00:00:00');
+        this.elements.nextDayBtn.disabled = selected >= today;
+      },
+
+      generateCsv(){
+        const data = this.getFormData();
+        const logDate = data.date;
+        const c1 = data.checklist.check1 ? '✓' : '-';
+        const c2 = data.checklist.check2 ? '✓' : '-';
+        const c3 = data.checklist.check3 ? '✓' : '-';
+        let csv = "\uFEFF";
+        csv += `佳元松江社區｜工作日誌｜${logDate}\n\n`;
+        csv += "一、社區動態\n項目,數量（戶）\n";
+        csv += `總裝潢施作,${data.community.totalRenovation}\n本日申請裝潢,${data.community.newRenovation}\n本日裝潢驗退,${data.community.renovationRetired}\n裝潢總計（累計）,${data.community.totalRenovationAccum}\n已驗退戶（累計）,${data.community.totalRenovationRetiredAccum}\n\n`;
+        csv += "二、社區基本數據\n項目,數值\n";
+        csv += `地址,松江路252巷10號\n總戶數,${data.community.totalHouseholds}\n本日交屋戶數,${data.community.newMoveIn}\n\n`;
+        csv += "三、人員編制\n職位,人員姓名,今日出勤,明日出勤,備註\n";
+        csv += `經理,${data.staff.managerName},${data.staff.todayShift},${data.staff.tomorrowShift},${data.staff.shiftNotes}\n\n`;
+        csv += "四、每日清點\n項目,完成狀態\n";
+        csv += `公共區域門窗安全檢查,${c1}\n無郵件及包裹點交,${c2}\n施工圍籬與施工車輛停放位置確認,${c3}\n\n`;
+        csv += "五、今日工作事項\n";
+        data.tasks.forEach(task=>{ csv += `${task}\n`; });
+        csv += "\n六、停車紀錄\n車牌號碼,戶別,車位編號,入場時間,出場時間,停放時長(分鐘)\n";
+        data.parking.forEach(r=>{
+          const finalSpot = this.resolveDisplaySpot(r);
+          csv += `${r.carPlate||''},${r.huBei||''},${finalSpot},${r.entryTime||''},${r.exitTime||''},${r.duration||''}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `佳元松江社區｜工作日誌｜${logDate.replace(/-/g,'')}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
+
+      exportToSheets(){
+        if (!this.gapiReady || !this.gisReady) return this.showToast('Google API 尚未準備就緒，請稍後再試。','error');
+
+        const token = gapi.client.getToken();
+        if (!token) {
+          this.tokenClient.requestAccessToken({ prompt: 'consent' });
+        } else {
+          this.appendDataToSheet(DEFAULT_SHEET_ID);
+        }
+      },
+
+      async appendDataToSheet(spreadsheetId) {
+        this.showToast('正在處理匯出...', 'success');
+        const data = this.getFormData();
+        const sheetTitle = data.date;
+        
+        if (!sheetTitle) {
+            this.showToast('無法獲取日期，無法建立工作表', 'error');
             return;
         }
-        
-        const fullHuBei = findFullHuBei(shorthandInput);
-        huBeiInput.value = fullHuBei;
 
-        spotStatusDisplay.textContent = '查詢中...';
-        const spotRef = doc(db, 'unit_parking_spots', fullHuBei.toUpperCase());
+        const valuesToWrite = [
+            [`佳元松江社區工作日誌 - 日期: ${sheetTitle}`],
+            [],
+            ["一、社區動態"],
+            ["項目", "本日數量", "累計數量"],
+            ["總裝潢施作戶數", data.community.totalRenovation, "-"],
+            ["本日申請裝潢", data.community.newRenovation, "-"],
+            ["本日裝潢驗退", data.community.renovationRetired, "-"],
+            ["裝潢總計", "-", data.community.totalRenovationAccum],
+            ["已驗退戶", "-", data.community.totalRenovationRetiredAccum],
+            ["本日交屋戶數", data.community.newMoveIn, "-"],
+            ["總戶數", data.community.totalHouseholds, "-"],
+            [],
+            ["二、人員編制"],
+            ["職位", "姓名", "今日出勤", "明日出勤", "備註"],
+            ["經理", data.staff.managerName, data.staff.todayShift, data.staff.tomorrowShift, data.staff.shiftNotes],
+            [],
+            ["三、每日清點"],
+            ["項目", "完成狀態"],
+            ["公共區域門窗安全檢查", data.checklist.check1 ? '完成' : '未完成'],
+            ["無郵件及包裹點交", data.checklist.check2 ? '完成' : '未完成'],
+            ["施工圍籬與施工車輛停放位置確認", data.checklist.check3 ? '完成' : '未完成'],
+            [],
+            ["四、今日工作事項"],
+            ...data.tasks.map(task => [task]),
+            [],
+            ["五、停車紀錄"],
+            ["車牌號碼", "戶別", "車位編號", "入場時間", "出場時間", "停放時長(分鐘)"],
+            ...data.parking.map(p => {
+              const finalSpot = this.resolveDisplaySpot(p);
+              return [ p.carPlate || '', p.huBei || '', finalSpot, p.entryTime || '', p.exitTime || '', p.duration || '' ];
+            })
+        ];
+
         try {
-            const spotSnap = await getDoc(spotRef);
-            if (spotSnap.exists()) {
-                const spotNumber = spotSnap.data().spotNumber || '資料有誤';
-                spotStatusDisplay.textContent = spotNumber;
-                retrievedSpotNumber = spotNumber;
+            const spreadsheet = await gapi.client.sheets.spreadsheets.get({ spreadsheetId });
+            const sheetExists = spreadsheet.result.sheets.some(
+                s => s.properties.title === sheetTitle
+            );
+
+            if (sheetExists) {
+                await gapi.client.sheets.spreadsheets.values.clear({
+                    spreadsheetId,
+                    range: sheetTitle
+                });
+                this.showToast('偵測到今日工作表，已清除舊資料...', 'success');
             } else {
-                spotStatusDisplay.textContent = '無';
-                retrievedSpotNumber = '';
+                const addSheetRequest = { addSheet: { properties: { title: sheetTitle } } };
+                await gapi.client.sheets.spreadsheets.batchUpdate({
+                    spreadsheetId,
+                    resource: { requests: [addSheetRequest] }
+                });
+                this.showToast(`已成功建立新的工作表: ${sheetTitle}`, 'success');
             }
-        } catch (error) {
-            console.error("查詢車位失敗:", error);
-            spotStatusDisplay.textContent = '查詢失敗';
-            retrievedSpotNumber = '';
+
+            await gapi.client.sheets.spreadsheets.values.update({
+                spreadsheetId,
+                range: `${sheetTitle}!A1`,
+                valueInputOption: 'USER_ENTERED',
+                resource: { values: valuesToWrite }
+            });
+
+            this.showToast(`成功將日誌匯出至工作表: ${sheetTitle}`, 'success');
+
+        } catch (err) {
+            console.error('寫入 Google Sheets 失敗:', err);
+            const msg = (err.result && err.result.error && err.result.error.message) ? err.result.error.message : '未知錯誤';
+            this.showToast(`匯出失敗: ${msg}`, 'error');
         }
-    }
+      },
 
-    async function addRecord() {
-      const carPlate = carPlateInput.value.trim().toUpperCase();
-      const huBei = huBeiInput.value.trim();
-      if (!carPlate || !huBei) {
-        showError('車牌號碼和戶別不能為空。');
-        return;
+      showToast(msg,type='success'){
+        this.elements.toast.textContent = msg;
+        this.elements.toast.className = `toast-${type}`;
+        this.elements.toast.classList.add('show');
+        setTimeout(()=>{ this.elements.toast.classList.remove('show'); }, 3000);
       }
-      hideError();
-      addBtnText.classList.add('hidden');
-      addBtnSpinner.classList.remove('hidden');
-      addRecordBtn.disabled = true;
-      
-      const now = new Date();
-      const docId = `${now.toISOString().split('T')[0]}_${carPlate.replace(/[^a-zA-Z0-9]/g, '')}`;
-      
-      try {
-        await setDoc(doc(db, 'parking_records', docId), {
-          licensePlate: carPlate, 
-          unit: huBei, 
-          spotNumber: retrievedSpotNumber,
-          entryTime: serverTimestamp(), 
-          entryDate: now.toISOString().split('T')[0],
-          exitTime: null,
-          status: 'present'
-        });
-        carPlateInput.value = ''; 
-        huBeiInput.value = '';
-        spotStatusDisplay.textContent = '-';
-        retrievedSpotNumber = '';
-        statusMessage.textContent = '新增成功！';
-        setTimeout(() => statusMessage.textContent = '', 2000);
-      } catch (e) {
-        showError("新增記錄失敗，請檢查網路連線。");
-        console.error("Add record error:", e);
-      } finally {
-        addBtnText.classList.remove('hidden');
-        addBtnSpinner.classList.add('hidden');
-        addRecordBtn.disabled = false;
-      }
-    }
-    
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js').then(registration => {
-          console.log('ServiceWorker registration successful with scope: ', registration.scope);
-        }, err => {
-          console.log('ServiceWorker registration failed: ', err);
-        });
-      });
-    }
+    };
 
-    voiceBtn.addEventListener('click', () => { if (recognition) recognition.start(); });
-    cameraBtn.addEventListener('click', () => { imageUpload.click(); });
-    imageUpload.addEventListener('change', handleImageUpload);
-    huBeiInput.addEventListener('change', handleHuBeiChange);
-    addRecordBtn.addEventListener('click', addRecord);
-    authButton.addEventListener('click', handleAuth);
-
-    initializeFirebase();
-    setupSpeechRecognition();
-
+    document.addEventListener('DOMContentLoaded', ()=> App.init());
   </script>
 </body>
 </html>
