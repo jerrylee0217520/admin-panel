@@ -32,17 +32,6 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    .record-card {
-      background-color: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 0.75rem;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      padding: 1rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: all 0.2s ease-in-out;
-    }
   </style>
 </head>
 <body class="antialiased">
@@ -72,7 +61,6 @@
             <label for="huBei" class="block text-sm font-medium text-gray-700">戶別:</label>
             <input type="text" id="huBei" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 p-3 text-lg uppercase" placeholder="輸入簡碼後自動匹配...">
           </div>
-          <!-- ##### NEW: Spot Status Display ##### -->
           <div>
               <label class="block text-sm font-medium text-gray-700">車位狀態:</label>
               <p id="spot-status-display" class="mt-1 text-lg font-bold text-gray-800">-</p>
@@ -99,19 +87,13 @@
             <div id="addBtnSpinner" class="spinner w-6 h-6 border-4 border-white rounded-full hidden mx-auto"></div>
           </button>
         </div>
-
-        <div class="mt-8">
-            <h2 class="text-xl font-bold text-gray-700 mb-4 text-center border-t pt-6">在場車輛</h2>
-            <div id="onSiteList" class="space-y-3">
-            </div>
-        </div>
     </main>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, collection, serverTimestamp, onSnapshot, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const USER_PROVIDED_API_KEY = "AIzaSyCspWUkVA6STWgjrLeXVgg5JnWnJWTKAtU";
     
@@ -137,14 +119,12 @@
     const errorText = document.getElementById('error-text');
     const addBtnText = document.getElementById('addBtnText');
     const addBtnSpinner = document.getElementById('addBtnSpinner');
-    const onSiteList = document.getElementById('onSiteList');
     const authButton = document.getElementById('auth-button');
     const userStatus = document.getElementById('user-status');
     const mainContent = document.getElementById('main-content');
     const spotStatusDisplay = document.getElementById('spot-status-display');
     
     let db, auth, user;
-    let onSiteListenerUnsubscribe = null;
     let retrievedSpotNumber = '';
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
@@ -211,14 +191,10 @@
             userStatus.textContent = `管理員已登入: ${user.displayName || user.email}`;
             authButton.textContent = '登出';
             mainContent.classList.remove('hidden');
-            setupRealtimeListener();
         } else {
             userStatus.textContent = '請登入管理員帳號以繼續。';
             authButton.textContent = '登入 Google';
             mainContent.classList.add('hidden');
-            if (onSiteListenerUnsubscribe) {
-                onSiteListenerUnsubscribe();
-            }
         }
     }
 
@@ -273,7 +249,6 @@
                 if (parsedJson.carPlate) { carPlateInput.value = parsedJson.carPlate.toUpperCase().replace(/\s|-/g, ''); }
                 if (parsedJson.huBei) { 
                     huBeiInput.value = parsedJson.huBei.toUpperCase();
-                    // Trigger change event to run matching logic
                     huBeiInput.dispatchEvent(new Event('change'));
                 }
                 statusMessage.textContent = 'AI 辨識完成！';
@@ -327,55 +302,7 @@
         };
         reader.readAsDataURL(file);
     }
-
-    function setupRealtimeListener() {
-      if (onSiteListenerUnsubscribe) onSiteListenerUnsubscribe();
-      try {
-        const collectionRef = collection(db, 'parking_records'); // CORRECTED PATH
-        const q = query(collectionRef, where("status", "==", "present"));
-        onSiteListenerUnsubscribe = onSnapshot(q, (snapshot) => {
-          const onSiteRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          onSiteRecords.sort((a, b) => (a.entryTime?.seconds || 0) - (b.entryTime?.seconds || 0));
-          renderOnSiteList(onSiteRecords);
-        }, (error) => {
-            console.error("Firestore listener failed:", error);
-            showError("讀取在場車輛列表失敗。");
-        });
-      } catch (e) {
-        console.error("Failed to set up Firestore listener:", e);
-        showError("設定數據監聽失敗。");
-      }
-    }
-
-    function renderOnSiteList(records) {
-        onSiteList.innerHTML = '';
-        if (records.length === 0) {
-            onSiteList.innerHTML = `<p class="text-gray-500 text-center text-sm">目前沒有在場車輛。</p>`;
-            return;
-        }
-        records.forEach(record => {
-            const recordEl = document.createElement('div');
-            recordEl.className = 'record-card';
-            recordEl.innerHTML = `
-              <div class="flex-grow">
-                <p class="font-bold text-base text-gray-800">${record.licensePlate}</p>
-                <p class="text-sm text-gray-600">${record.unit} (${record.spotNumber || '無車位'})</p>
-              </div>
-              <button data-id="${record.id}" class="leave-btn py-2 px-3 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
-                出場
-              </button>
-            `;
-            onSiteList.appendChild(recordEl);
-        });
-        document.querySelectorAll('.leave-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                leaveRecord(btn.dataset.id);
-            });
-        });
-    }
     
-    // ##### NEW: Intelligent Comparison Function #####
     async function handleHuBeiChange() {
         const shorthandInput = huBeiInput.value;
         if (!shorthandInput.trim()) {
@@ -384,11 +311,9 @@
             return;
         }
         
-        // Step 1: Auto-complete the unit name
         const fullHuBei = findFullHuBei(shorthandInput);
         huBeiInput.value = fullHuBei;
 
-        // Step 2: Look up the parking spot for the completed unit name
         spotStatusDisplay.textContent = '查詢中...';
         const spotRef = doc(db, 'unit_parking_spots', fullHuBei.toUpperCase());
         try {
@@ -424,10 +349,10 @@
       const docId = `${now.toISOString().split('T')[0]}_${carPlate.replace(/[^a-zA-Z0-9]/g, '')}`;
       
       try {
-        await setDoc(doc(db, 'parking_records', docId), { // CORRECTED PATH
+        await setDoc(doc(db, 'parking_records', docId), {
           licensePlate: carPlate, 
           unit: huBei, 
-          spotNumber: retrievedSpotNumber, // Use the auto-retrieved spot number
+          spotNumber: retrievedSpotNumber,
           entryTime: serverTimestamp(), 
           entryDate: now.toISOString().split('T')[0],
           exitTime: null,
@@ -448,19 +373,6 @@
         addRecordBtn.disabled = false;
       }
     }
-
-    async function leaveRecord(id) {
-        try {
-            await updateDoc(doc(db, 'parking_records', id), { // CORRECTED PATH
-                exitTime: serverTimestamp(),
-                status: 'departed'
-            });
-            statusMessage.textContent = '出場登記成功！';
-            setTimeout(() => statusMessage.textContent = '', 2000);
-        } catch (e) {
-            showError("更新記錄失敗。請重試。");
-        }
-    }
     
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -475,7 +387,7 @@
     voiceBtn.addEventListener('click', () => { if (recognition) recognition.start(); });
     cameraBtn.addEventListener('click', () => { imageUpload.click(); });
     imageUpload.addEventListener('change', handleImageUpload);
-    huBeiInput.addEventListener('change', handleHuBeiChange); // MODIFIED: Use 'change' for better UX
+    huBeiInput.addEventListener('change', handleHuBeiChange);
     addRecordBtn.addEventListener('click', addRecord);
     authButton.addEventListener('click', handleAuth);
 
