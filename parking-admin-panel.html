@@ -117,7 +117,8 @@
       appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
     
-    const ADMIN_UIDS = ["KcaxVmcqI3RzxWdhCl2dhVGPxti1", "8dYFqXhM4gVQr9MTEI5z3P4Xn9p2", "XwGNJBbuzPNTZ7dRB4THn4ZmN053"];
+    // **重要變更**：移除寫死的 ADMIN_UIDS 陣列，改為動態從 Firestore 讀取。
+    // const ADMIN_UIDS = ["KcaxVmcqI3RzxWdhCl2dhVGPxti1", "8dYFqXhM4gVQr9MTEI5z3P4Xn9p2", "XwGNJBbuzPNTZ7dRB4THn4ZmN053"];
     
     const allHuBeiList = [
         '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓', '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓', '6A-6樓', '6B-6樓', '6C-6樓', '6D-6樓', '6E-6樓', '6F-6樓', '5A-5樓', '5B-5樓', '5C-5樓', '5D-5樓', '5E-5樓', '5F-5樓', '4A-4樓', '4B-4樓', '4CD-4樓', '4EF-4樓', '3A-3樓', '3B-3樓', '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓', '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
@@ -129,6 +130,7 @@
       records: [], vehicles: [], entryTimeChart: null, selectedDate: '',
       retrievedSpotNumber: '',
       isAuthReady: false,
+      adminUids: [], // 新增：用於儲存從 Firestore 讀取到的管理員 UID
 
       init() {
         const app = initializeApp(firebaseConfig);
@@ -173,14 +175,29 @@
         this.elements.datePickerInput.addEventListener('change', (e) => this.fetchAndDisplayRecords(e.target.value));
       },
       
+      // **重要變更**：調整認證監聽器，確保管理員清單載入後才更新 UI
       initAuthWatcher() {
         onAuthStateChanged(this.auth, (user) => {
           this.user = user;
           if (!this.isAuthReady) {
               this.isAuthReady = true;
+              this.fetchAdminUids().then(() => this.updateAuthUI());
+          } else {
+              this.updateAuthUI();
           }
-          this.updateAuthUI();
         });
+      },
+
+      async fetchAdminUids() {
+        try {
+            const adminsRef = collection(this.db, 'admins');
+            const snapshot = await getDocs(adminsRef);
+            this.adminUids = snapshot.docs.map(doc => doc.id);
+            console.log("已從 Firestore 載入管理員 UID：", this.adminUids);
+        } catch (error) {
+            console.error("載入管理員清單失敗：", error);
+            alert("載入管理員清單失敗，部分功能可能無法正常運作。");
+        }
       },
 
       async handleRedirectResult() {
@@ -209,12 +226,14 @@
       },
       
       updateAuthUI() {
-        if (!this.isAuthReady) {
+        if (!this.isAuthReady || this.adminUids.length === 0) {
+            // 如果管理員清單還沒載入，就先不更新 UI
             return;
         }
 
         if (this.user) {
-            const isAdmin = ADMIN_UIDS.includes(this.user.uid);
+            // **重要變更**：從動態讀取的 adminUids 陣列中判斷權限
+            const isAdmin = this.adminUids.includes(this.user.uid);
             if (isAdmin) {
                 this.elements.userStatus.textContent = `管理員已登入: ${this.user.displayName || this.user.email}`;
                 this.elements.authButton.textContent = '登出';
