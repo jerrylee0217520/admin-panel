@@ -106,7 +106,6 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getFirestore, doc, getDoc, addDoc, getDocs, collection, query, where, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    // ##### MODIFIED: Import signInWithPopup #####
     import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
@@ -179,7 +178,6 @@
         });
       },
 
-      // ##### MODIFIED: Changed to use signInWithPopup #####
       async handleAuth() {
         if (this.user) {
           await signOut(this.auth);
@@ -192,8 +190,7 @@
             await signInWithPopup(this.auth, provider);
           } catch (error) {
             console.error("登入失敗:", error);
-            // Avoid alert() which might be blocked, use a console log or a custom toast/message element
-            this.elements.userStatus.textContent = `登入失敗: ${error.message}`;
+            this.elements.userStatus.textContent = `登入失敗: ${error.code}`;
           }
         }
       },
