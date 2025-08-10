@@ -106,6 +106,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getFirestore, doc, getDoc, addDoc, getDocs, collection, query, where, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    // ##### MODIFIED: Import redirect-related functions #####
     import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithRedirect, signOut, getRedirectResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
@@ -179,14 +180,18 @@
         });
       },
 
+      // ##### NEW: Function to handle the result of a redirect login #####
       async handleRedirectResult() {
         try {
+            this.elements.userStatus.textContent = "正在驗證登入狀態...";
             await getRedirectResult(this.auth);
         } catch (error) {
             console.error("處理登入重新導向失敗:", error);
+            this.elements.userStatus.textContent = "登入驗證失敗，請重試。";
         }
       },
 
+      // ##### MODIFIED: Changed to use signInWithRedirect #####
       async handleAuth() {
         if (this.user) {
           await signOut(this.auth);
