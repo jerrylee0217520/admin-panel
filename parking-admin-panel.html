@@ -29,7 +29,6 @@
     .btn:hover {
       transform: translateY(-2px);
     }
-    /* Style for table rows */
     #records-table-body tr:hover {
         background-color: #eff6ff; /* blue-50 */
     }
@@ -48,7 +47,7 @@
 
     <main id="main-content" class="grid grid-cols-1 lg:grid-cols-3 gap-6 hidden">
       
-      <div class="lg-col-span-1 flex flex-col gap-6">
+      <div class="lg:col-span-1 flex flex-col gap-6">
         <div class="card p-6">
           <h2 class="text-xl font-bold mb-4">新增停車記錄</h2>
           <form id="new-record-form" class="space-y-4">
@@ -58,7 +57,7 @@
             </div>
             <div>
               <label for="unit-input" class="block text-sm font-medium text-gray-700">戶別:</label>
-              <input type="text" id="unit-input" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="輸入完畢後將自動比對車位">
+              <input type="text" id="unit-input" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="輸入簡碼後將自動匹配">
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700">車位狀態:</label>
@@ -135,7 +134,18 @@
       appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
     
-    const ADMIN_UIDS = ["8dYFqXhM4gVQr_MTEI5z3P4Xn9p2", "KcaxVmcqI3RzxWdhCl2dhVGPxti1"];
+    const ADMIN_UIDS = ["8dYFqXhM4gVQr9MTEI5z3P4Xn9p2", "KcaxVmcqI3RzxWdhCl2dhVGPxti1"];
+
+    // ##### NEW: Unit list for auto-completion #####
+    const allHuBeiList = [
+        '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓',
+        '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓',
+        '6A-6樓', '6B-6樓', '6C-6樓', '6D-6樓', '6E-6樓', '6F-6樓',
+        '5A-5樓', '5B-5樓', '5C-5樓', '5D-5樓', '5E-5樓', '5F-5樓',
+        '4A-4樓', '4B-4樓', '4CD-4樓', '4EF-4樓', '3A-3樓', '3B-3樓',
+        '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓',
+        '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
+    ];
 
     const App = {
       db: null, auth: null, user: null,
@@ -176,7 +186,7 @@
       bindEvents() {
         this.elements.authButton.addEventListener('click', () => this.handleAuth());
         this.elements.newRecordForm.addEventListener('submit', (e) => this.addRecord(e));
-        this.elements.unitInput.addEventListener('change', (e) => this.lookupParkingSpot(e.target.value));
+        this.elements.unitInput.addEventListener('change', (e) => this.handleHuBeiChange(e.target.value)); // MODIFIED
         this.elements.vehiclesPresentContainer.addEventListener('click', (e) => {
           if (e.target.tagName === 'BUTTON') {
             this.checkOut(e.target.dataset.id);
@@ -246,8 +256,21 @@
         });
       },
 
-      async lookupParkingSpot(unitId) {
-        const unit = unitId.trim().toUpperCase();
+      // ##### NEW: Auto-completion function #####
+      findFullHuBei(shorthandInput) {
+        const input = String(shorthandInput).toUpperCase().trim();
+        if (!input) return shorthandInput;
+        if (input === 'VIP') return '貴賓';
+        const matchedHuBei = allHuBeiList.find(fullHuBei => fullHuBei.toUpperCase().startsWith(input));
+        return matchedHuBei || shorthandInput;
+      },
+
+      // ##### MODIFIED: This function now combines auto-completion and lookup #####
+      async handleHuBeiChange(unitId) {
+        const fullUnitId = this.findFullHuBei(unitId);
+        this.elements.unitInput.value = fullUnitId; // Update the input field with the full name
+
+        const unit = fullUnitId.trim().toUpperCase();
         if (!unit) {
             this.elements.spotStatusDisplay.textContent = '-';
             this.retrievedSpotNumber = '';
@@ -301,7 +324,7 @@
             const querySnapshot = await getDocs(q);
             this.records = [];
             querySnapshot.forEach(doc => { this.records.push({ id: doc.id, ...doc.data() }); });
-            this.records.sort((a,b) => b.entryTime.seconds - a.entryTime.seconds);
+            this.records.sort((a,b) => (b.entryTime?.seconds || 0) - (a.entryTime?.seconds || 0));
             this.displayRecords();
             this.updateChart();
         } catch(error) {
@@ -342,8 +365,6 @@
           const duration = (entry && exit) ? Math.round((exit - entry) / 60000) : '-';
           const formatTime = (dateObj) => dateObj ? `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}` : '-';
           const spotDisplayText = record.spotNumber ? record.spotNumber : '無';
-          
-          // ##### NEW: Conditional Coloring Logic #####
           const rowClass = !record.spotNumber ? 'bg-yellow-50' : 'bg-white';
 
           const row = `
