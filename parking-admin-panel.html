@@ -106,7 +106,9 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getFirestore, doc, getDoc, addDoc, getDocs, collection, query, where, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, getRedirectResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, getRedirectResult, signInWithRedirect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    // （可選）啟用 App Check（建議於 Console 啟用 reCAPTCHA v3 後再開啟下方程式碼）
+    // import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app-check.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
@@ -121,21 +123,40 @@
         '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓', '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓', '6A-6樓', '6B-6樓', '6C-6樓', '6D-6樓', '6E-6樓', '6F-6樓', '5A-5樓', '5B-5樓', '5C-5樓', '5D-5樓', '5E-5樓', '5F-5樓', '4A-4樓', '4B-4樓', '4CD-4樓', '4EF-4樓', '3A-3樓', '3B-3樓', '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓', '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
     ];
 
+    // 產生台灣時區的 YYYY-MM-DD
+    function getTWDateString(date = new Date()) {
+      const f = new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' });
+      const parts = f.formatToParts(date);
+      const y = parts.find(p => p.type === 'year').value;
+      const m = parts.find(p => p.type === 'month').value;
+      const d = parts.find(p => p.type === 'day').value;
+      return `${y}-${m}-${d}`;
+    }
+
+    // 正規化輸入
+    function normalizePlate(s) { return String(s || '').toUpperCase().replace(/\\s+/g, '').slice(0, 10); }
+
     const App = {
       db: null, auth: null, user: null,
       elements: {},
       records: [], vehicles: [], entryTimeChart: null, selectedDate: '',
       retrievedSpotNumber: '',
-      isAuthReady: false,
+      presentUnsub: null,
 
       init() {
         const app = initializeApp(firebaseConfig);
+        // （可選）App Check
+        // self.FIREBASE_APPCHECK_DEBUG_TOKEN = false;
+        // initializeAppCheck(app, {
+        //   provider: new ReCaptchaV3Provider('YOUR-RECAPTCHA-SITE-KEY'),
+        //   isTokenAutoRefreshEnabled: true
+        // });
         this.db = getFirestore(app);
         this.auth = getAuth(app);
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.handleRedirectResult(); // 雖然改用 Popup，但保留此函式以防萬一
+        this.handleRedirectResult(); // 保留 Redirect 結果處理
         this.initAuthWatcher();
         this.initChart();
       },
@@ -166,7 +187,13 @@
         this.elements.vehiclesPresentContainer.addEventListener('click', (e) => {
           if (e.target.tagName === 'BUTTON') { this.checkOut(e.target.dataset.id); }
         });
-        this.elements.searchInput.addEventListener('input', (e) => this.filterRecords(e.target.value));
+        // 搜尋框 debounce
+        let debounceTimer;
+        this.elements.searchInput.addEventListener('input', (e) => {
+          clearTimeout(debounceTimer);
+          const v = e.target.value;
+          debounceTimer = setTimeout(() => this.filterRecords(v), 150);
+        });
         this.elements.exportCsvBtn.addEventListener('click', () => this.exportToCsv());
         this.elements.datePickerInput.addEventListener('change', (e) => this.fetchAndDisplayRecords(e.target.value));
       },
@@ -175,10 +202,11 @@
         onAuthStateChanged(this.auth, async (user) => {
           this.user = user;
           
+          // 切換帳號/登出時解除即時監聽
+          if (!user && this.presentUnsub) { this.presentUnsub(); this.presentUnsub = null; }
+
           if (user) {
-              console.log("登入成功，使用者 UID:", user.uid);
               this.elements.userStatus.textContent = `正在驗證權限...`;
-              
               try {
                   const isAdmin = await this.checkAdminStatus(user.uid);
                   this.updateAuthUI(isAdmin);
@@ -188,32 +216,24 @@
                   this.elements.mainContent.classList.add('hidden');
               }
           } else {
-              console.log("已登出，使用者 UID: 無");
               this.elements.userStatus.textContent = '請使用管理員帳號登入以繼續。';
               this.elements.authButton.textContent = '登入 Google';
               this.elements.mainContent.classList.add('hidden');
-              this.isAuthReady = true; 
           }
         });
       },
 
       async checkAdminStatus(uid) {
-          const adminsRef = collection(this.db, 'admins');
           try {
-              const adminDoc = await getDoc(doc(adminsRef, uid));
+              const adminDoc = await getDoc(doc(this.db, 'admins', uid));
               return adminDoc.exists();
           } catch (error) {
-              // 在權限不足的情況下，Firestore 會拋出錯誤，這也代表不是管理員
-              if (error.code === 'permission-denied') {
-                  return false;
-              }
-              // 對其他錯誤，拋出以讓上層處理
+              if (error.code === 'permission-denied') return false;
               throw error;
           }
       },
 
       async handleRedirectResult() {
-        this.elements.userStatus.textContent = "正在驗證登入狀態...";
         try {
             const result = await getRedirectResult(this.auth);
             if (result) {
@@ -230,16 +250,15 @@
           await signOut(this.auth);
         } else {
           const provider = new GoogleAuthProvider();
-          provider.setCustomParameters({
-            prompt: 'select_account'
-          });
-          
+          provider.setCustomParameters({ prompt: 'select_account' });
           try {
-            // **核心修正：從重新導向登入改為彈出視窗登入**
             await signInWithPopup(this.auth, provider);
-            // 由於 onAuthStateChanged 會自動處理，這裡不需要額外操作
           } catch (error) {
-            // 處理彈出視窗登入可能產生的錯誤
+            // 被瀏覽器阻擋彈窗 → fallback 至 Redirect
+            if (error?.code === 'auth/popup-blocked') {
+              await signInWithRedirect(this.auth, provider);
+              return;
+            }
             console.error("彈出視窗登入失敗:", error);
             alert("登入失敗，請檢查網路連線或稍後再試。");
           }
@@ -261,6 +280,8 @@
                this.elements.userStatus.textContent = `登入身份: ${this.user.displayName || this.user.email} (非管理員，無權限)`;
                this.elements.authButton.textContent = '登出';
                this.elements.mainContent.classList.add('hidden');
+               // 非管理員狀態確保解除監聽
+               if (this.presentUnsub) { this.presentUnsub(); this.presentUnsub = null; }
             }
         } else {
           this.elements.userStatus.textContent = '請使用管理員帳號登入以繼續。';
@@ -270,7 +291,7 @@
       },
       
       initDatePicker() {
-          this.selectedDate = new Date().toISOString().split('T')[0];
+          this.selectedDate = getTWDateString(); // 使用台灣時區
           this.elements.datePickerInput.value = this.selectedDate;
           this.elements.selectedDateDisplay.textContent = this.selectedDate;
       },
@@ -284,12 +305,20 @@
         });
       },
 
+      // 戶別匹配：先 exact，再 prefix（至少2字元）
       findFullHuBei(shorthandInput) {
         const input = String(shorthandInput).toUpperCase().trim();
         if (!input) return shorthandInput;
         if (input === 'VIP') return '貴賓';
-        const matchedHuBei = allHuBeiList.find(fullHuBei => fullHuBei.toUpperCase().startsWith(input));
-        return matchedHuBei || shorthandInput;
+
+        const exact = allHuBeiList.find(h => h.toUpperCase() === input);
+        if (exact) return exact;
+
+        if (input.length >= 2) {
+          const matched = allHuBeiList.find(fullHuBei => fullHuBei.toUpperCase().startsWith(input));
+          if (matched) return matched;
+        }
+        return shorthandInput;
       },
 
       async handleHuBeiChange(unitId) {
@@ -323,15 +352,21 @@
         console.error("Firestore Error:", error);
         let userMessage = "讀取資料時發生未知錯誤。";
         switch (error.code) {
-            case 'failed-precondition': userMessage = "讀取失敗：缺少資料庫索引。請按 F12 打開 Console，點擊錯誤訊息中的連結來自動建立。"; break;
-            case 'permission-denied': userMessage = "讀取失敗：權限不足。請登入管理員帳號，或檢查 Firebase 安全規則設定。"; break;
-            case 'unavailable': userMessage = "讀取失敗：無法連線至資料庫，請檢查您的網路連線。"; break;
+          case 'failed-precondition': {
+            const link = (error.message || '').match(/https?:\\/\\/\\S+/)?.[0] || '';
+            userMessage = `讀取失敗：缺少資料庫索引。${link ? '<a class="text-blue-600 underline" href=\"' + link + '\" target=\"_blank\">點此建立索引</a>' : ''}`;
+            break;
+          }
+          case 'permission-denied':
+            userMessage = "讀取失敗：權限不足。請登入管理員帳號，或檢查 Firebase 安全規則設定。"; break;
+          case 'unavailable':
+            userMessage = "讀取失敗：無法連線至資料庫，請檢查您的網路連線。"; break;
         }
         if (type === 'table') {
             const colspan = 6;
-            element.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-red-500 py-4">${userMessage}</td></tr>`;
+            element.innerHTML = `<tr><td colspan=\"${colspan}\" class=\"text-center text-red-500 py-4\">${userMessage}</td></tr>`;
         } else {
-            element.innerHTML = `<div class="p-3 bg-red-100 text-red-700 rounded-lg">${userMessage}</div>`;
+            element.innerHTML = `<div class=\"p-3 bg-red-100 text-red-700 rounded-lg\">${userMessage}</div>`;
         }
       },
 
@@ -346,7 +381,7 @@
         try {
             const querySnapshot = await getDocs(q);
             this.records = [];
-            querySnapshot.forEach(doc => { this.records.push({ id: doc.id, ...doc.data() }); });
+            querySnapshot.forEach(docSnap => { this.records.push({ id: docSnap.id, ...docSnap.data() }); });
             this.records.sort((a,b) => (b.entryTime?.seconds || 0) - (a.entryTime?.seconds || 0));
             this.displayRecords();
             this.updateChart();
@@ -358,9 +393,11 @@
       listenForPresentVehicles() {
         const recordsRef = collection(this.db, 'parking_records');
         const q = query(recordsRef, where("status", "==", "present"));
-        onSnapshot(q, (snapshot) => {
+        // 先解除舊監聽
+        if (this.presentUnsub) { this.presentUnsub(); this.presentUnsub = null; }
+        this.presentUnsub = onSnapshot(q, (snapshot) => {
             this.vehicles = [];
-            snapshot.forEach(doc => { this.vehicles.push({ id: doc.id, ...doc.data() }); });
+            snapshot.forEach(docSnap => { this.vehicles.push({ id: docSnap.id, ...docSnap.data() }); });
             this.displayPresentVehicles();
           }, (error) => {
             this.handleFirestoreError(error, this.elements.vehiclesPresentContainer, 'div');
@@ -417,6 +454,17 @@
                 </div>`;
               this.elements.vehiclesPresentContainer.insertAdjacentHTML('beforeend', vehicleHTML);
           });
+
+          // 防連點：讓「出場」按鈕在請求期間禁用
+          this.elements.vehiclesPresentContainer.querySelectorAll('button[data-id]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              btn.disabled = true;
+              btn.textContent = '處理中…';
+              setTimeout(() => { // 若請求失敗會在 catch 還原
+                if (!btn.dataset.done) { btn.disabled = false; btn.textContent = '出場'; }
+              }, 8000);
+            }, { once: true });
+          });
       },
       
       updateChart() {
@@ -430,31 +478,40 @@
       },
 
       filterRecords(searchTerm) {
-          const lowerCaseSearch = searchTerm.toLowerCase();
+          const lowerCaseSearch = String(searchTerm || '').toLowerCase();
           if (!lowerCaseSearch) { this.displayRecords(this.records); return; }
           const filtered = this.records.filter(r => 
-              r.licensePlate.toLowerCase().includes(lowerCaseSearch) ||
-              r.unit.toLowerCase().includes(lowerCaseSearch)
+              (r.licensePlate || '').toLowerCase().includes(lowerCaseSearch) ||
+              (r.unit || '').toLowerCase().includes(lowerCaseSearch)
           );
           this.displayRecords(filtered);
       },
 
       async addRecord(e) {
         e.preventDefault();
-        const plate = this.elements.licensePlateInput.value.trim().toUpperCase();
-        const unit = this.elements.unitInput.value.trim().toUpperCase();
-        if (!plate || !unit) { alert('車牌和戶別為必填項。'); return; }
+        const plate = normalizePlate(this.elements.licensePlateInput.value);
+        const unitStd = this.findFullHuBei(this.elements.unitInput.value).toUpperCase();
+        if (!/^[A-Z0-9\\-]{3,10}$/.test(plate)) { alert('車牌格式不正確'); return; }
+        if (!allHuBeiList.map(h=>h.toUpperCase()).includes(unitStd)) { alert('戶別不存在，請重新確認'); return; }
+
         const newRecord = {
-          licensePlate: plate, unit: unit, spotNumber: this.retrievedSpotNumber,
+          licensePlate: plate,
+          unit: unitStd,
+          spotNumber: this.retrievedSpotNumber,
           entryTime: serverTimestamp(),
-          entryDate: new Date().toISOString().split('T')[0],
-          exitTime: null, status: 'present'
+          entryDate: getTWDateString(), // 使用台灣時區
+          exitTime: null,
+          status: 'present'
         };
         try {
           await addDoc(collection(this.db, 'parking_records'), newRecord);
           this.elements.newRecordForm.reset();
           this.elements.spotStatusDisplay.textContent = '-';
           this.retrievedSpotNumber = '';
+          // 重新顯示今日資料
+          if (this.selectedDate === newRecord.entryDate) {
+            this.fetchAndDisplayRecords(this.selectedDate);
+          }
         } catch (error) {
           console.error("新增記錄失敗: ", error);
           alert('新增記錄失敗，請檢查網路連線或稍後再試。');
@@ -464,21 +521,22 @@
       async checkOut(docId) {
         if (!docId) return;
         const recordRef = doc(this.db, 'parking_records', docId);
+        const btn = this.elements.vehiclesPresentContainer.querySelector(`button[data-id="${docId}"]`);
+        if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
         try {
-          await updateDoc(recordRef, {
-            exitTime: serverTimestamp(),
-            status: 'departed'
-          });
+          await updateDoc(recordRef, { exitTime: serverTimestamp(), status: 'departed' });
+          if (btn) { btn.dataset.done = '1'; } // 標記完成，避免 8 秒後被還原
         } catch (error) {
             console.error("更新出場時間失敗: ", error);
+            if (btn) { btn.disabled = false; btn.textContent = '出場'; }
             alert('更新出場時間失敗，請檢查網路連線或稍後再試。');
         }
       },
 
       exportToCsv() {
         if (this.records.length === 0) { alert('沒有記錄可匯出。'); return; }
-        let csvContent = "\uFEFF";
-        csvContent += "車牌號碼,戶別,車位編號,入場時間,出場時間,停放時長(分)\n";
+        let csvContent = "\\uFEFF";
+        csvContent += "車牌號碼,戶別,車位編號,入場時間,出場時間,停放時長(分)\\n";
         this.records.forEach(record => {
             const entry = this.parseTimestamp(record.entryTime);
             const exit = this.parseTimestamp(record.exitTime);
@@ -493,7 +551,7 @@
             };
             const duration = (entry && exit) ? Math.round((exit - entry) / 60000) : '';
             const spotCsvText = record.spotNumber ? record.spotNumber : '無';
-            csvContent += `${record.licensePlate},${record.unit},${spotCsvText},${formatTime(entry)},${formatTime(exit)},${duration}\n`;
+            csvContent += `${record.licensePlate},${record.unit},${spotCsvText},${formatTime(entry)},${formatTime(exit)},${duration}\\n`;
         });
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
