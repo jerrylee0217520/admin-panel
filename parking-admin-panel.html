@@ -117,6 +117,8 @@
       appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
     
+    const ADMIN_UIDS = ["KcaxVmcqI3RzxWdhCl2dhVGPxti1", "8dYFqXhM4gVQr9MTEI5z3P4Xn9p2"];
+    
     const allHuBeiList = [
         '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓', '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓', '6A-6樓', '6B-6樓', '6C-6樓', '6D-6樓', '6E-6樓', '6F-6樓', '5A-5樓', '5B-5樓', '5C-5樓', '5D-5樓', '5E-5樓', '5F-5樓', '4A-4樓', '4B-4樓', '4CD-4樓', '4EF-4樓', '3A-3樓', '3B-3樓', '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓', '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
     ];
@@ -187,25 +189,32 @@
         }
       },
       
+      // ##### MODIFIED: Added detailed console logs for debugging #####
       updateAuthUI() {
         if (this.user) {
-            this.user.getIdTokenResult(true).then((idTokenResult) => {
-                if (idTokenResult.claims.admin) {
-                    this.elements.userStatus.textContent = `管理員已登入: ${this.user.displayName || this.user.email}`;
-                    this.elements.authButton.textContent = '登出';
-                    this.elements.mainContent.classList.remove('hidden');
-                    if (!this.selectedDate) {
-                        this.initDatePicker();
-                        this.fetchAndDisplayRecords(this.selectedDate);
-                        this.listenForPresentVehicles();
-                    }
-                } else {
-                    this.elements.userStatus.textContent = `登入身份: ${this.user.displayName || this.user.email} (非管理員，無權限)`;
-                    this.elements.authButton.textContent = '登出';
-                    this.elements.mainContent.classList.add('hidden');
+            // [DEBUG] Log the UID and the admin check result
+            console.log(`[DEBUG] UID: ${this.user.uid}`);
+            const isAdmin = ADMIN_UIDS.includes(this.user.uid);
+            console.log(`[DEBUG] Is Admin? ${isAdmin}`);
+
+            if (isAdmin) {
+                // Admin is logged in
+                this.elements.userStatus.textContent = `管理員已登入: ${this.user.displayName || this.user.email}`;
+                this.elements.authButton.textContent = '登出';
+                this.elements.mainContent.classList.remove('hidden');
+                if (!this.selectedDate) {
+                    this.initDatePicker();
+                    this.fetchAndDisplayRecords(this.selectedDate);
+                    this.listenForPresentVehicles();
                 }
-            });
+            } else {
+                // Non-admin user is logged in
+                this.elements.userStatus.textContent = `登入身份: ${this.user.displayName || this.user.email} (非管理員，無權限)`;
+                this.elements.authButton.textContent = '登出';
+                this.elements.mainContent.classList.add('hidden');
+            }
         } else {
+          // User is logged out
           this.elements.userStatus.textContent = '請使用管理員帳號登入以繼續。';
           this.elements.authButton.textContent = '登入 Google';
           this.elements.mainContent.classList.add('hidden');
