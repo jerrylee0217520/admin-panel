@@ -106,7 +106,6 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getFirestore, doc, getDoc, addDoc, getDocs, collection, query, where, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    // ##### MODIFIED: Import redirect-related functions #####
     import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithRedirect, signOut, getRedirectResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
@@ -131,13 +130,14 @@
       retrievedSpotNumber: '',
 
       init() {
+        console.log("[DEBUG] App Initializing...");
         const app = initializeApp(firebaseConfig);
         this.db = getFirestore(app);
         this.auth = getAuth(app);
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.handleRedirectResult(); // Handle login result first
+        this.handleRedirectResult();
         this.initAuthWatcher();
         this.initChart();
       },
@@ -175,27 +175,34 @@
       
       initAuthWatcher() {
         onAuthStateChanged(this.auth, (user) => {
+          console.log("[DEBUG] Auth state changed. User:", user ? user.email : 'Logged out');
           this.user = user;
           this.updateAuthUI();
         });
       },
 
-      // ##### NEW: Function to handle the result of a redirect login #####
       async handleRedirectResult() {
+        console.log("[DEBUG] Checking for login redirect result...");
+        this.elements.userStatus.textContent = "正在驗證登入狀態...";
         try {
-            this.elements.userStatus.textContent = "正在驗證登入狀態...";
-            await getRedirectResult(this.auth);
+            const result = await getRedirectResult(this.auth);
+            if (result) {
+                console.log("[DEBUG] Redirect result processed successfully for user:", result.user.email);
+            } else {
+                console.log("[DEBUG] No redirect result found. This is normal on initial load without a redirect.");
+            }
         } catch (error) {
-            console.error("處理登入重新導向失敗:", error);
+            console.error("[DEBUG] Error processing redirect result:", error);
             this.elements.userStatus.textContent = "登入驗證失敗，請重試。";
         }
       },
 
-      // ##### MODIFIED: Changed to use signInWithRedirect #####
       async handleAuth() {
         if (this.user) {
+          console.log("[DEBUG] Logout initiated...");
           await signOut(this.auth);
         } else {
+          console.log("[DEBUG] Login with redirect initiated...");
           const provider = new GoogleAuthProvider();
           signInWithRedirect(this.auth, provider);
         }
@@ -204,6 +211,9 @@
       updateAuthUI() {
         if (this.user) {
             const isAdmin = ADMIN_UIDS.includes(this.user.uid);
+            console.log(`[DEBUG] Current UID: ${this.user.uid}`);
+            console.log(`[DEBUG] Is Admin? ${isAdmin}`);
+
             if (isAdmin) {
                 this.elements.userStatus.textContent = `管理員已登入: ${this.user.displayName || this.user.email}`;
                 this.elements.authButton.textContent = '登出';
