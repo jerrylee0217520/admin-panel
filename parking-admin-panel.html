@@ -106,7 +106,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getFirestore, doc, getDoc, addDoc, getDocs, collection, query, where, onSnapshot, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithRedirect, signOut, getRedirectResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, getRedirectResult } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDeRHsloR1iY0_bzpYbPzdCiBljGfck98k",
@@ -135,7 +135,7 @@
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.handleRedirectResult();
+        this.handleRedirectResult(); // 雖然改用 Popup，但保留此函式以防萬一
         this.initAuthWatcher();
         this.initChart();
       },
@@ -176,7 +176,6 @@
           this.user = user;
           
           if (user) {
-              // 登入成功
               console.log("登入成功，使用者 UID:", user.uid);
               this.elements.userStatus.textContent = `正在驗證權限...`;
               
@@ -189,7 +188,6 @@
                   this.elements.mainContent.classList.add('hidden');
               }
           } else {
-              // 登出狀態
               console.log("已登出，使用者 UID: 無");
               this.elements.userStatus.textContent = '請使用管理員帳號登入以繼續。';
               this.elements.authButton.textContent = '登入 Google';
@@ -235,7 +233,16 @@
           provider.setCustomParameters({
             prompt: 'select_account'
           });
-          signInWithRedirect(this.auth, provider);
+          
+          try {
+            // **核心修正：從重新導向登入改為彈出視窗登入**
+            await signInWithPopup(this.auth, provider);
+            // 由於 onAuthStateChanged 會自動處理，這裡不需要額外操作
+          } catch (error) {
+            // 處理彈出視窗登入可能產生的錯誤
+            console.error("彈出視窗登入失敗:", error);
+            alert("登入失敗，請檢查網路連線或稍後再試。");
+          }
         }
       },
       
