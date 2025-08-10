@@ -117,7 +117,7 @@
       appId: "1:640527461851:web:eed9f82d698275371fcbfe",
     };
     
-    const ADMIN_UIDS = ["KcaxVmcqI3RzxWdhCl2dhVGPxti1", "8dYFqXhM4gVQr9MTEI5z3P4Xn9p2"];
+    const ADMIN_UIDS = ["KcaxVmcqI3RzxWdhCl2dhVGPxti1", "8dYFqXhM4gVQr9MTEI5z3P4Xn9p2", "XwGNJBbuzPNTZ7dRB4THn4ZmN053"];
     
     const allHuBeiList = [
         '10A-10樓', '10B-10樓', '9A-9樓', '9B-9樓', '8A-8樓', '8B-8樓', '7A-7樓', '7B-7樓', '7C-7樓', '7D-7樓', '7E-7樓', '7F-7樓', '6A-6樓', '6B-6樓', '6C-6樓', '6D-6樓', '6E-6樓', '6F-6樓', '5A-5樓', '5B-5樓', '5C-5樓', '5D-5樓', '5E-5樓', '5F-5樓', '4A-4樓', '4B-4樓', '4CD-4樓', '4EF-4樓', '3A-3樓', '3B-3樓', '3CD-3樓', '3EF-3樓', '2A-2樓', '2B-2樓', '2C-2樓', '2D-2樓', '2E-2樓', '2F-2樓', '1A-1樓', '1B-1樓', '施工', '貴賓'
@@ -128,17 +128,16 @@
       elements: {},
       records: [], vehicles: [], entryTimeChart: null, selectedDate: '',
       retrievedSpotNumber: '',
-      isAuthReady: false, // NEW: Flag to track auth state readiness
+      isAuthReady: false,
 
       init() {
-        console.log("[DEBUG] App Initializing...");
         const app = initializeApp(firebaseConfig);
         this.db = getFirestore(app);
         this.auth = getAuth(app);
         
         this.cacheDOMElements();
         this.bindEvents();
-        this.handleRedirectResult(); // This must run before onAuthStateChanged
+        this.handleRedirectResult();
         this.initAuthWatcher();
         this.initChart();
       },
@@ -176,24 +175,20 @@
       
       initAuthWatcher() {
         onAuthStateChanged(this.auth, (user) => {
-          console.log("[DEBUG] Auth state changed. User:", user ? user.email : 'Logged out');
           this.user = user;
           if (!this.isAuthReady) {
-              this.isAuthReady = true; // Mark that the initial auth check is complete
+              this.isAuthReady = true;
           }
           this.updateAuthUI();
         });
       },
 
       async handleRedirectResult() {
-        console.log("[DEBUG] Checking for login redirect result...");
         this.elements.userStatus.textContent = "正在驗證登入狀態...";
         try {
             const result = await getRedirectResult(this.auth);
             if (result) {
-                console.log("[DEBUG] Redirect result processed successfully for user:", result.user.email);
-            } else {
-                console.log("[DEBUG] No redirect result found. This is normal on initial load.");
+                console.log("[DEBUG] Redirect result processed for user:", result.user.email);
             }
         } catch (error) {
             console.error("[DEBUG] Error processing redirect result:", error);
@@ -203,26 +198,24 @@
 
       async handleAuth() {
         if (this.user) {
-          console.log("[DEBUG] Logout initiated...");
           await signOut(this.auth);
         } else {
-          console.log("[DEBUG] Login with redirect initiated...");
           const provider = new GoogleAuthProvider();
+          // ##### CORE FIX: Force account selection every time #####
+          provider.setCustomParameters({
+            prompt: 'select_account'
+          });
           signInWithRedirect(this.auth, provider);
         }
       },
       
       updateAuthUI() {
         if (!this.isAuthReady) {
-            console.log("[DEBUG] Auth not ready yet, skipping UI update.");
-            return; // Don't update UI until initial check is done
+            return;
         }
 
         if (this.user) {
             const isAdmin = ADMIN_UIDS.includes(this.user.uid);
-            console.log(`[DEBUG] Current UID: ${this.user.uid}`);
-            console.log(`[DEBUG] Is Admin? ${isAdmin}`);
-
             if (isAdmin) {
                 this.elements.userStatus.textContent = `管理員已登入: ${this.user.displayName || this.user.email}`;
                 this.elements.authButton.textContent = '登出';
